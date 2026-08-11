@@ -1,0 +1,62 @@
+# Handoff dari code-reviewer (§23.7, Q9).
+# Reviewer read-only: changed_files WAJIB kosong, decision WAJIB ada.
+# Dikumpulkan runner sebagai structured output — reviewer tidak menulis file.
+#
+# Divalidasi terhadap schemas/handoff.schema.json.
+
+schema_version: "1.0"
+
+task_id: BE-101
+role: code-reviewer
+status: changes-requested
+
+summary: >-
+  Correctness dan scope terpenuhi. Dua temuan menghalangi approve: guard
+  idempotensi tidak menangani race antar transaksi, dan satu jalur error
+  menelan konteks aslinya.
+
+# Wajib kosong — plan mode tanpa Write/Edit (A-03).
+changed_files: []
+
+tests:
+  executed: []
+  not_executed_reason: >-
+    Reviewer bersifat read-only dan tidak menjalankan test. Bukti eksekusi
+    berasal dari handoff implementer dan CI.
+
+findings:
+  - severity: blocker
+    category: correctness
+    location:
+      path: internal/payroll/usecase/close_period.go
+      line: 48
+    reason: >-
+      Pemeriksaan status dan penulisan status terjadi pada dua statement
+      terpisah tanpa transaksi. Dua pemanggilan bersamaan dapat sama-sama
+      melewati guard.
+    recommended_action: >-
+      Bungkus baca-tulis dalam satu transaksi, atau pakai UPDATE bersyarat
+      yang memeriksa status pada klausa WHERE.
+
+  - severity: major
+    category: maintainability
+    location:
+      path: internal/payroll/usecase/close_period.go
+      line: 71
+    reason: >-
+      Error dari repository dikembalikan sebagai errors.New sehingga konteks
+      aslinya hilang dan tidak dapat ditelusuri.
+    recommended_action: 'Bungkus dengan fmt.Errorf("...: %w", err).'
+
+  - severity: nit
+    category: test
+    location:
+      path: internal/payroll/usecase/close_period_test.go
+    reason: Belum ada kasus untuk periode milik tenant lain.
+    recommended_action: Tambahkan satu kasus negatif lintas tenant.
+
+decision: request-changes
+
+contract_deviations: []
+
+completed_at: "2026-07-30T13:05:00+07:00"

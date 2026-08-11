@@ -1,0 +1,23 @@
+# TEMPLATE KANONIK — failure report (§54).
+#
+# Agent yang gagal menyelesaikan task wajib mengembalikan failure report ini,
+# bukan sekadar "gagal". Bentuk normatifnya `schemas/failure.schema.json`.
+# Kategori diambil dari §53.
+
+schema_version: "1.0"
+
+category:                    # requirement ambiguity | contract conflict | path conflict |
+                             # environment failure | test failure | tool permission failure |
+                             # dependency unavailable | agent API failure | CI failure |
+                             # merge conflict | security violation
+task_id:
+last_successful_step:        # langkah terakhir yang berhasil — memudahkan retry tanpa ulang dari awal
+
+affected_files: []           # path yang tersentuh sebelum gagal
+command:                     # perintah yang gagal, bila kegagalan pada eksekusi command
+error_summary:               # ringkasan error yang dapat ditindak — kutip pesan paling penting
+safe_to_retry:               # true | false — idempotency §16.4
+rollback_performed:          # true | false — wajib dipertimbangkan bila ada perubahan file
+recommended_owner:           # role yang direkomendasikan menangani kegagalan berikutnya
+
+# completed_at:

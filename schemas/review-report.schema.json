@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/review-report.schema.json",
+  "title": "M2S-VSH Review Report",
+  "description": "Laporan review independen Code Reviewer (§23.7). Code Reviewer menjalankan plan mode tanpa Write/Edit (A-03, Q9) dan menghasilkan handoff yang wajib memuat decision. Schema ini adalah superstructure di atas handoff.schema.json: findings, decision, dan tests di-$ref ke properti handoff, bukan diduplikasi — satu sumber kebenaran. Dokumen registry/referensi — belum menjadi Kind validator runner.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "role", "status", "summary", "findings", "decision", "changed_files", "tests"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+
+    "role": {
+      "const": "code-reviewer",
+      "description": "Review report hanya dihasilkan Code Reviewer (§23.6)."
+    },
+
+    "status": { "$ref": "common.schema.json#/$defs/handoffStatus" },
+
+    "summary": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+
+    "findings": {
+      "description": "Temuan review — severity, category, location, reason, recommended_action (§23.7). Bentuknya di-$ref dari handoff.schema.json agar tidak ada dua definisi finding.",
+      "$ref": "handoff.schema.json#/properties/findings"
+    },
+
+    "decision": {
+      "description": "Keputusan akhir Code Reviewer (§23.7).",
+      "$ref": "handoff.schema.json#/properties/decision"
+    },
+
+    "changed_files": {
+      "description": "Code Reviewer TIDAK boleh mengubah berkas (§23.5, A-03). Wajib kosong — array kosong adalah pernyataan eksplisit, bukan field yang hilang.",
+      "type": "array",
+      "maxItems": 0
+    },
+
+    "tests": {
+      "description": "Bukti eksekusi test atau static analysis yang tidak mengubah berkas (§23.4).",
+      "$ref": "handoff.schema.json#/properties/tests"
+    },
+
+    "contract_deviations": {
+      "description": "Penyimpangan terhadap task contract yang ditemukan review (§35).",
+      "$ref": "handoff.schema.json#/properties/contract_deviations"
+    },
+
+    "completed_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+
+  "allOf": [
+    {
+      "description": "request-changes menuntut sedikitnya satu finding — menolak tanpa alasan tidak dapat ditindak (§23.7).",
+      "if": {
+        "properties": { "decision": { "const": "request-changes" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": { "findings": { "type": "array", "minItems": 1 } }
+      }
+    }
+  ]
+}

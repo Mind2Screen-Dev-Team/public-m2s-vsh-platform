@@ -1,0 +1,63 @@
+# CODEOWNERS — lapis keempat mitigasi R-12, mitigasi utama R-20.
+#
+# TEMPLATE KANONIK. Salin ke `.github/CODEOWNERS` pada repo aplikasi.
+#
+# Mengapa file ini ada. R-12 (agent memodifikasi definisi dirinya) punya empat
+# vektor; tiga tertahan lokal oleh `permissions.deny` dan hook PreToolUse.
+# Vektor keempat — PR yang mengubah `.claude/**` lalu di-merge — melewati
+# SELURUH lapisan lokal. Hanya CI dan CODEOWNERS yang menahannya
+# (risk-register: "Vektor PR melewati seluruh lapisan lokal, sehingga CI dan
+# CODEOWNERS wajib ada").
+#
+# ── Yang file ini LAKUKAN dan TIDAK lakukan ──────────────────────────────
+#
+# LAKUKAN: meminta review pemilik secara otomatis saat PR menyentuh path di
+# bawah, dan menandai di UI siapa yang berwenang. Itu jejak audit, bukan gate.
+#
+# TIDAK: memblokir merge. Setting `require_code_owner_review` SENGAJA
+# dibiarkan MATI (ADR-007 #6). Sebabnya keras dan tak dapat dielakkan:
+# pemilik satu-satunya di sini adalah pemilik repo, yang juga author PR, dan
+# GitHub menyatakan "Pull request authors cannot approve their own pull
+# requests." Mengaktifkannya menghasilkan syarat yang mustahil dipenuhi —
+# setiap PR terblokir permanen. Aktifkan HANYA setelah identitas kedua
+# (`m2s-approver`, ADR-001 #5) ada dan terdaftar di bawah.
+#
+# Catat juga: "Repository owners and administrators can merge a pull request
+# even if it hasn't received an approving review." Jadi selama pemilik repo
+# tunggal, CODEOWNERS bukan penghalang bagi pemilik itu sendiri. Ia menahan
+# agent, bukan manusia pemilik.
+
+# ── Default ──────────────────────────────────────────────────────────────
+*                           @fajarcandraaa
+
+# ── Konfigurasi agent — §26 melarang mutlak agent menyentuh ini ─────────
+# Vektor PR R-12. Sejalan dengan `permissions.deny` di .claude/settings.json.
+/.claude/                   @fajarcandraaa
+/.claude/**                 @fajarcandraaa
+
+# ── CI, security config, dan CODEOWNERS itu sendiri — R-20 ──────────────
+# §16.5 melarang seluruh agent "mengubah CI protection, CODEOWNERS, atau
+# security configuration tanpa dedicated task". DevOps memiliki
+# `.github/workflows/**` tetapi TIDAK boleh mengubah branch protection.
+# CODEOWNERS memiliki dirinya sendiri — tanpa baris ini, PR dapat menghapus
+# seluruh aturan di atas dalam satu langkah.
+/.github/                   @fajarcandraaa
+/.github/**                 @fajarcandraaa
+/.github/CODEOWNERS         @fajarcandraaa
+/.github/workflows/         @fajarcandraaa
+/.github/workflows/**       @fajarcandraaa
+
+# ── Runner dan quality gate — human-only write ───────────────────────────
+# Agent yang dapat mengubah penegak batas path dapat melonggarkan batas yang
+# mengikatnya sendiri (component-inventory §7).
+/cmd/m2s/                   @fajarcandraaa
+/cmd/m2s/**                 @fajarcandraaa
+/Makefile                   @fajarcandraaa
+
+# ── Shared file berisiko konflik lintas task — R-19 ─────────────────────
+/go.mod                     @fajarcandraaa
+/go.sum                     @fajarcandraaa
+/package.json               @fajarcandraaa
+/package-lock.json          @fajarcandraaa
+/pnpm-lock.yaml             @fajarcandraaa
+/yarn.lock                  @fajarcandraaa

@@ -1,0 +1,33 @@
+# TEMPLATE KANONIK — capability registry (§41).
+#
+# Daftar capability eksternal yang disetujui. Tidak ada agent yang boleh
+# melakukan dynamic install saat task berjalan; setiap capability harus
+# terdaftar dan disetujui lebih dulu. Bentuk per-entry mengikuti
+# `schemas/capability.schema.json`.
+#
+# SALIN KE `governance/capability-registry.yaml` DI AKAR CONTROL REPO — path itu
+# human-only-write (component-inventory §7, deny di .claude/settings.json),
+# sehingga penyalinan dilakukan manusia, bukan agent. Penambahan capability
+# baru: TL/SA menilai relevance + overlap (§9.4), Workflow Maintainer melakukan
+# source review, lalu entry ditambah di sini sebelum install.
+#
+# Versioning: entry memakai version_or_commit pin. Version floating dilarang
+# untuk package yang sudah disetujui (§9.4).
+
+schema_version: "1.0"
+capabilities: []
+# capabilities:
+#   - name: open-design
+#     source: github.com/nexu-io/open-design
+#     version_or_commit: v0.1.0
+#     license: MIT
+#     reviewer: technical-lead-system-analyst
+#     approved_roles: [ui-ux-designer]
+#     allowed_tools: [Read, Write]
+#     allowed_paths:
+#       - design/**
+#       - prototypes/**
+#       - artifacts/**
+#     install_date: "YYYY-MM-DDTHH:MM:SSZ"
+#     review_date: "YYYY-MM-DDTHH:MM:SSZ"
+#     checksum_or_lock: open-design@v0.1.0.lock

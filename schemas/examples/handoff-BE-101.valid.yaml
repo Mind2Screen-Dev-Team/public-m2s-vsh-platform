@@ -1,0 +1,57 @@
+# Handoff dari backend-engineer setelah implementasi selesai (§35).
+# Divalidasi terhadap schemas/handoff.schema.json.
+
+schema_version: "1.0"
+
+task_id: BE-101
+role: backend-engineer
+status: implementation-complete
+
+summary: >-
+  Menambahkan operasi close periode payroll yang idempotent. Periode yang
+  sudah closed menolak modifikasi lewat guard pada usecase, bukan pada
+  handler, agar berlaku untuk seluruh pemanggil.
+
+changed_files:
+  - path: internal/payroll/usecase/close_period.go
+    purpose: Implementasi operasi close beserta guard idempotensi
+    change_kind: added
+  - path: internal/payroll/usecase/close_period_test.go
+    purpose: Unit test — close ganda, periode terkunci, periode tidak ada
+    change_kind: added
+  - path: internal/payroll/enum.go
+    purpose: Menambah status PeriodClosed
+    change_kind: modified
+
+tests:
+  executed:
+    - command: make fmt
+      result: passed
+    - command: make vet
+      result: passed
+    - command: make test-payroll
+      result: passed
+    - command: path-scope-check
+      result: passed
+
+decisions:
+  - >-
+    Guard idempotensi ditempatkan pada usecase, bukan handler, agar berlaku
+    untuk seluruh entry point termasuk job terjadwal.
+
+assumptions:
+  - >-
+    Periode yang closed tidak pernah dibuka kembali pada v0.1.0. Bila
+    reopen dibutuhkan, guard ini perlu ditinjau ulang.
+
+risks:
+  - >-
+    enum.go adalah shared file. Task lain yang menambah status secara
+    paralel akan berkonflik meski reservasi path terpisah.
+
+unresolved: []
+
+contract_deviations: []
+
+pr_url: https://github.com/Mind2Screen-Dev-Team/m2s-vsh-project-backend/pull/7
+completed_at: "2026-07-30T11:42:00+07:00"

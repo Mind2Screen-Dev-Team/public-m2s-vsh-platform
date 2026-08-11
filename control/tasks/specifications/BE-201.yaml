@@ -1,0 +1,63 @@
+# BE-201 — Task Contract: Backend Multi-Component Status
+
+schema_version: "1.0"
+
+task:
+  id: BE-201
+  title: "Perluas GET /api/v1/status jadi multi-component status"
+  type: backend-implementation
+  project: pilot-phase-7
+  status: technical-ready
+  contract_ids: ["CONTRACT-201"]
+
+ownership:
+  role: backend-engineer
+  repository: m2s-vsh-project-backend
+  base_branch: develop
+  branch: agent/BE-201-multi-status
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 100
+  timeout_minutes: 60
+
+paths:
+  allowed:
+    - cmd/server/**
+    - internal/handler/**
+    - go.mod
+  forbidden:
+    - .claude/**
+    - .task/**
+    - contracts/**
+    - go.sum
+
+shared_file_ownership:
+  - path: go.mod
+    owner_task_id: BE-102
+    owner_role: backend-engineer
+    rationale: "BE-102 task pertama yang menginisialisasi module Go pada repo seed-only (go mod init). BE-201 memodifikasi go.mod bila perlu deps baru, namun owner tetap BE-102 (precedent arsip BE-102.yaml)."
+
+inputs:
+  - contracts/CONTRACT-201.yaml
+
+acceptance_criteria:
+  - "GET /api/v1/status mengembalikan 200 dengan JSON berisi services array (3 komponen: backend-api, database, auth)"
+  - "Field lama status, version, uptime_seconds tetap ada (backward-compat)"
+  - "Per komponen: status, version, uptime, last_checked (RFC 3339), latency_ms, message"
+  - "Aggregate status = worst-of services (error > degraded > ok > unknown)"
+  - "Response schema sesuai CONTRACT-201"
+  - "Unit test handler: 200 OK, JSON valid, count 3, field types, aggregate"
+
+quality_gates:
+  - go test ./internal/handler/...
+  - go vet ./...
+
+outputs:
+  - code
+  - unit-tests
+  - pull-request
+
+stop_conditions:
+  - "dependency required"

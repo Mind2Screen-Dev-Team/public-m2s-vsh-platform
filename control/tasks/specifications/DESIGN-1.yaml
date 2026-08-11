@@ -1,0 +1,70 @@
+# DESIGN-1 — Task Contract: Design System Status Screen + Handoff
+
+# Contoh task design untuk Phase 6 (spesifikasi referensi, status draft).
+# Menunjukkan: wilayah design/** (owner ui-ux-designer §19.7), handoff sbg
+# output, input dari flow/wireframe/prototype. Repo target = control (main-only).
+#
+# Catatan runner: status ini `draft` (H-07 minta technical-ready) DAN
+# base_branch = main ditolak validate-task (ADR-001 #2). Keduanya sengaja:
+# design task pada control repo TIDAK melalui scripts/launch-task (runner tolak
+# base main). Ia dijalankan manual sebagai planning/docs branch
+# `worktree-design-*`, agent UI/UX masuk sesi di sana (Lihat
+# docs/operator/phase-6-open-design.md). Spec ini pola referensi, bukan task
+# aktif yang siap launch.
+
+schema_version: "1.0"
+
+task:
+  id: DESIGN-1
+  title: Design handoff System Status screen
+  type: design
+  project: pilot-phase-7
+  status: draft
+
+ownership:
+  role: ui-ux-designer
+  repository: public-m2s-vsh-platform
+  base_branch: main
+  branch: agent/DESIGN-1-status-handoff
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 30
+  timeout_minutes: 45
+
+paths:
+  allowed:
+    - design/handoff/DESIGN-1/**
+    - design/tokens/**
+    - design/flows/**
+    - design/wireframes/**
+    - design/prototypes/**
+  forbidden:
+    - src/**
+    - .claude/**
+    - .task/**
+    - cmd/m2s/**
+    - Makefile
+
+inputs:
+  - design/DESIGN.md
+  - design/flows/system-status-flow.md
+  - design/wireframes/status-screen-wireframe.md
+  - design/prototypes/status-screen.html
+
+acceptance_criteria:
+  - Handoff menyebut komponen, state (loading/success/degraded/error), responsive, accessibility
+  - Handoff mereferensi token DESIGN.md
+  - Design tidak menyentuh src/** maupun repo frontend
+
+quality_gates:
+  - make verify
+
+outputs:
+  - design-artifact
+  - documentation
+
+stop_conditions:
+  - forbidden path required
+  - contract change required

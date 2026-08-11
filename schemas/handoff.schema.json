@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/handoff.schema.json",
+  "title": "M2S-VSH Handoff Contract",
+  "description": "Laporan penutup satu sesi agent (§35). Agent tidak boleh hanya mengembalikan 'selesai': handoff tanpa test evidence atau changed-file inventory dianggap incomplete. Dikumpulkan runner sebagai structured output — reviewer dan QA tidak menulis file sendiri (Q9).",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "role", "status", "summary", "changed_files", "tests", "contract_deviations"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+
+    "role": {
+      "$ref": "common.schema.json#/$defs/role",
+      "description": "Role penghasil handoff. Memakai `role`, bukan `writerRole`, karena code-reviewer juga menghasilkan handoff meski read-only (Q9)."
+    },
+
+    "status": { "$ref": "common.schema.json#/$defs/handoffStatus" },
+
+    "summary": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Ringkasan yang dapat dibaca manusia. 'selesai' saja tidak memenuhi §35."
+    },
+
+    "changed_files": {
+      "description": "Inventaris berkas yang diubah. Wajib ada — boleh kosong bagi role read-only, tetapi keputusannya harus eksplisit, bukan field yang hilang. Lihat batasan per-status di bawah.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "purpose"],
+        "properties": {
+          "path": { "$ref": "common.schema.json#/$defs/pathGlob" },
+          "purpose": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "change_kind": {
+            "type": "string",
+            "enum": ["added", "modified", "deleted", "renamed"]
+          }
+        }
+      }
+    },
+
+    "tests": {
+      "description": "Bukti eksekusi test. §35: handoff tanpa test evidence dianggap incomplete.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executed"],
+      "properties": {
+        "executed": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["command", "result"],
+            "properties": {
+              "command": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+              "result": {
+                "type": "string",
+                "enum": ["passed", "failed", "skipped"]
+              },
+              "output_excerpt": {
+                "description": "Kutipan output yang relevan. Wajib bila result failed — kegagalan tanpa bukti tidak dapat ditindak.",
+                "type": "string"
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "result": { "const": "failed" } },
+                  "required": ["result"]
+                },
+                "then": {
+                  "required": ["output_excerpt"],
+                  "properties": { "output_excerpt": { "type": "string", "minLength": 1 } }
+                }
+              }
+            ]
+          }
+        },
+        "not_executed_reason": {
+          "$ref": "common.schema.json#/$defs/nonEmptyString",
+          "description": "Wajib bila executed kosong. Mencegah 'tidak menjalankan test' lewat tanpa penjelasan."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "executed": { "type": "array", "maxItems": 0 } },
+            "required": ["executed"]
+          },
+          "then": {
+            "required": ["not_executed_reason"],
+            "properties": { "not_executed_reason": true }
+          }
+        }
+      ]
+    },
+
+    "findings": {
+      "description": "Temuan review atau defect QA. §23.7 menuntut setiap finding memiliki severity, reason, location, dan recommended action; §22.8 menuntut defect memiliki severity dan reproduction steps.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "location", "reason", "recommended_action"],
+        "properties": {
+          "severity": {
+            "description": "Skala ini DITETAPKAN schema, bukan dikutip dokumen arsitektur — §22.8 dan §23.7 menuntut severity tanpa mendefinisikan nilainya, dan dokumen memakai beberapa skala tercampur (high/medium/low, critical/major/minor, blocker). Satu skala dipilih agar dapat ditegakkan.",
+            "type": "string",
+            "enum": ["blocker", "major", "minor", "nit"]
+          },
+          "category": {
+            "description": "§23.7: review mencakup correctness, security, maintainability, test, dan scope.",
+            "type": "string",
+            "enum": ["correctness", "security", "maintainability", "test", "scope", "performance"]
+          },
+          "location": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path"],
+            "properties": {
+              "path": { "$ref": "common.schema.json#/$defs/pathGlob" },
+              "line": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "reason": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "recommended_action": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "reproduction_steps": {
+            "description": "Wajib bagi defect QA (§22.8). Tidak wajib bagi finding review statis.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+
+    "decision": {
+      "description": "Keputusan akhir Code Reviewer (§23.7). Hanya bermakna bagi role code-reviewer.",
+      "type": "string",
+      "enum": ["approve", "approve-with-nonblocking-notes", "request-changes"]
+    },
+
+    "decisions": {
+      "description": "Keputusan teknis yang diambil agent selama pengerjaan (§35).",
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "assumptions": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "risks": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "unresolved": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "contract_deviations": {
+      "description": "Penyimpangan dari task contract. Wajib ada sebagai array — array kosong berarti pernyataan eksplisit 'tidak ada penyimpangan', berbeda dari field yang hilang.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "detail"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "forbidden-path-needed",
+              "contract-change-needed",
+              "dependency-needed",
+              "migration-needed",
+              "acceptance-criteria-unmet",
+              "quality-gate-skipped"
+            ]
+          },
+          "detail": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        }
+      }
+    },
+
+    "blocked_reason": {
+      "description": "Wajib bila status blocked atau failed. §32 dan §34 stop_conditions.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stop_condition", "detail"],
+      "properties": {
+        "stop_condition": { "$ref": "common.schema.json#/$defs/stopCondition" },
+        "detail": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+      }
+    },
+
+    "pr_url": {
+      "type": "string",
+      "pattern": "^https://github\\.com/[^/]+/[^/]+/pull/[0-9]+$"
+    },
+
+    "completed_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+
+  "allOf": [
+    {
+      "description": "blocked dan failed menuntut blocked_reason — agent tidak boleh berhenti tanpa menyebut sebabnya.",
+      "if": {
+        "properties": { "status": { "enum": ["blocked", "failed"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["blocked_reason"],
+        "properties": { "blocked_reason": true }
+      }
+    },
+    {
+      "description": "Code Reviewer wajib menyertakan decision (§23.7) dan tidak boleh mengubah berkas apa pun — plan mode, tanpa Write/Edit (A-03, Q9).",
+      "if": {
+        "properties": { "role": { "const": "code-reviewer" } },
+        "required": ["role"]
+      },
+      "then": {
+        "required": ["decision"],
+        "properties": {
+          "decision": true,
+          "changed_files": { "type": "array", "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "description": "request-changes menuntut sedikitnya satu finding — menolak tanpa alasan tidak dapat ditindak.",
+      "if": {
+        "properties": { "decision": { "const": "request-changes" } },
+        "required": ["decision"]
+      },
+      "then": {
+        "required": ["findings"],
+        "properties": { "findings": { "type": "array", "minItems": 1 } }
+      }
+    },
+    {
+      "description": "changes-requested dan defect-found menuntut findings (§22.8, §23.7).",
+      "if": {
+        "properties": { "status": { "enum": ["changes-requested", "defect-found"] } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["findings"],
+        "properties": { "findings": { "type": "array", "minItems": 1 } }
+      }
+    },
+    {
+      "description": "implementation-complete menuntut bukti perubahan bagi role penulis. Reviewer dikecualikan karena tidak menghasilkan status ini.",
+      "if": {
+        "properties": {
+          "status": { "const": "implementation-complete" },
+          "role": {
+            "$comment": "Daftar ini sengaja mengulang writerRole, bukan mem-$ref, agar code-reviewer terkecuali secara eksplisit. Setiap penambahan writerRole wajib ditambahkan di sini juga — ditegakkan TestWriterRolesMustReportChanges.",
+            "enum": [
+              "backend-engineer",
+              "frontend-engineer",
+              "qa-engineer",
+              "devops-release",
+              "technical-writer",
+              "technical-lead-system-analyst",
+              "ui-ux-designer",
+              "fullstack-engineer",
+              "mobile-engineer",
+              "android-developer",
+              "ios-developer"
+            ]
+          }
+        },
+        "required": ["status", "role"]
+      },
+      "then": {
+        "properties": { "changed_files": { "type": "array", "minItems": 1 } }
+      }
+    }
+  ]
+}

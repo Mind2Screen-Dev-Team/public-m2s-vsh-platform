@@ -1,0 +1,63 @@
+# DESIGN-2 — Task Contract: Design Handoff Dashboard Multi-Status
+
+# Task design pada control repo main-only — dijalankan manual sebagai branch
+# planning `worktree-design-*`, bukan via scripts/launch-task (runner tolak
+# base main). Lihat docs/operator/phase-6-open-design.md.
+
+schema_version: "1.0"
+
+task:
+  id: DESIGN-2
+  title: "Design handoff dashboard multi-status (halaman /status)"
+  type: design
+  project: pilot-phase-7
+  status: draft
+  contract_ids: ["CONTRACT-202"]
+
+ownership:
+  role: ui-ux-designer
+  repository: public-m2s-vsh-platform
+  base_branch: main
+  branch: agent/DESIGN-2-dashboard-handoff
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 60
+  timeout_minutes: 45
+
+paths:
+  allowed:
+    - design/handoff/DESIGN-2/**
+    - design/tokens/**
+    - design/flows/**
+    - design/wireframes/**
+    - design/prototypes/**
+  forbidden:
+    - src/**
+    - .claude/**
+    - .task/**
+    - cmd/m2s/**
+    - Makefile
+
+inputs:
+  - contracts/CONTRACT-201.yaml   # shape respon API (read)
+  - design/DESIGN.md
+  - design/tokens/tokens.md
+
+acceptance_criteria:
+  - "design/handoff/DESIGN-2/handoff.md ada: dashboard grid StatusCard, header refresh + hint 30s"
+  - "States loading/empty/success/error terdefinisi"
+  - "Responsive breakpoint: <640 / 640-1024 / >1024"
+  - "Aksesibilitas: aria-live polite, button focusable, contrast AA"
+  - "Token ref ke DESIGN.md + tokens.md (tanpa design system baru)"
+  - "contract.yaml mirror DESIGN-1 pola"
+
+quality_gates:
+  - make verify
+
+outputs:
+  - design-artifact
+
+stop_conditions:
+  - "forbidden path required"

@@ -1,0 +1,55 @@
+# BE-102-fix — Task Contract: CORS Header Fix
+
+schema_version: "1.0"
+
+task:
+  id: "BE-102-fix"
+  title: "Fix CORS header di backend status endpoint"
+  type: "backend-implementation"
+  project: "pilot-phase-7"
+  status: "completed"
+  contract_ids: ["CONTRACT-102"]
+
+ownership:
+  role: "backend-developer"
+  repository: "m2s-vsh-project-backend"
+  base_branch: "main"
+  branch: "agent/BE-102-fix-cors"
+
+execution:
+  isolation: "worktree"
+  background: true
+  max_turns: 50
+  timeout_minutes: 30
+
+paths:
+  allowed:
+    - "internal/handler/status.go"
+    - "internal/handler/status_test.go"
+  forbidden:
+    - ".claude/**"
+    - ".task/**"
+    - "contracts/**"
+    - "go.mod"
+    - "go.sum"
+
+inputs:
+  - "contracts/CONTRACT-102.yaml"
+
+acceptance_criteria:
+  - "Response menyertakan header Access-Control-Allow-Origin: *"
+  - "Unit test memverifikasi header CORS ada"
+  - "go test ./... PASS"
+
+quality_gates:
+  - "go test ./..."
+  - "go vet ./..."
+
+outputs:
+  - "code"
+  - "unit-tests"
+  - "pull-request"
+
+stop_conditions:
+  - "CORS header terverifikasi via test"
+  - "go test PASS"

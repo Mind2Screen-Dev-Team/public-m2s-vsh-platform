@@ -1,0 +1,71 @@
+# FE-202 — Task Contract: Frontend Dashboard Multi-Status
+
+schema_version: "1.0"
+
+task:
+  id: FE-202
+  title: "Implementasi dashboard multi-status di halaman /status"
+  type: frontend-implementation
+  project: pilot-phase-7
+  status: technical-ready
+  contract_ids: ["CONTRACT-201", "CONTRACT-202"]
+
+ownership:
+  role: frontend-engineer
+  repository: m2s-vsh-project-frontend
+  base_branch: develop
+  branch: agent/FE-202-multi-status-dashboard
+
+execution:
+  isolation: worktree
+  background: true
+  scaffold: nextjs
+  max_turns: 120
+  timeout_minutes: 90
+
+paths:
+  allowed:
+    - src/app/status/**
+    - src/components/**
+    - src/app/globals.css
+    - src/app/layout.tsx
+    - package.json
+    - package-lock.json
+  forbidden:
+    - .claude/**
+    - .task/**
+    - src/app/page.tsx
+    - design/**
+
+shared_file_ownership:
+  - path: package.json
+    owner_task_id: FE-202
+    owner_role: frontend-engineer
+    rationale: "FE-202 task pertama yang menginisialisasi manifest frontend pada repo seed-only (package.json tak ada). Satu-satunya penulis package.json/package-lock.json (precedent BE-102 go.mod)."
+
+inputs:
+  - contracts/CONTRACT-201.yaml
+  - contracts/CONTRACT-202.yaml
+  - design/handoff/DESIGN-2/handoff.md
+
+acceptance_criteria:
+  - "Halaman /status menampilkan dashboard grid 3 kartu (per service)"
+  - "Polling otomatis 30 detik + tombol manual refresh"
+  - "State lengkap: loading, empty, success, error"
+  - "Responsive: grid-cols-1 → md:2 → lg:3"
+  - "Aksesibilitas: region aria-live polite, button refresh focusable"
+  - "StatusCard jadi presentational (terima prop, tanpa self-fetch)"
+  - "Unit/component test vitest: loading→success, error+refresh, empty"
+
+quality_gates:
+  - npm test
+  - npm run build
+
+outputs:
+  - code
+  - unit-tests
+  - pull-request
+
+stop_conditions:
+  - "dependency required"
+  - "forbidden path required"

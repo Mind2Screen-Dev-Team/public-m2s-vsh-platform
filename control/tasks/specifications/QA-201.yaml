@@ -1,0 +1,53 @@
+# QA-201 — Task Contract: QA Dashboard Multi-Status
+
+schema_version: "1.0"
+
+task:
+  id: QA-201
+  title: "QA acceptance dashboard multi-status + report"
+  type: integration
+  project: pilot-phase-7
+  status: draft
+  contract_ids: ["CONTRACT-201", "CONTRACT-202"]
+
+ownership:
+  role: qa-engineer
+  repository: public-m2s-vsh-platform
+  base_branch: main
+  branch: agent/QA-201-multi-status-qa
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 60
+  timeout_minutes: 45
+
+paths:
+  allowed:
+    - qa/CONTRACT-201/**
+  forbidden:
+    - .claude/**
+    - .task/**
+    - contracts/**
+    - control/**
+    - docs/**
+    - cmd/**
+    - internal/**
+
+inputs:
+  - contracts/CONTRACT-201.yaml
+  - qa/CONTRACT-102/QA-102-report.md   # template format report
+
+acceptance_criteria:
+  - "qa/CONTRACT-201/QA-201-report.md: summary + tabel TC + evidence curl"
+  - "TC: 200 + 3 services, field per komponen, backward-compat old fields, aggregate, negative (server down → FE error), FE integration (3 kartu, auto-refresh, manual refresh)"
+  - "Acceptance semua PASS"
+
+quality_gates:
+  - make verify
+
+outputs:
+  - test-report
+
+stop_conditions:
+  - "forbidden path required"

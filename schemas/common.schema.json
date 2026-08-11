@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/common.schema.json",
+  "title": "M2S-VSH Kosakata Bersama",
+  "description": "Definisi enum dan tipe yang dipakai bersama oleh task, reservation, dan handoff schema. Tidak dipakai langsung untuk memvalidasi dokumen; hanya dirujuk lewat $ref. Sumber: §33 (state machine), §17-§25 (role), §30, §34, §35.",
+
+  "$defs": {
+    "schemaVersion": {
+      "description": "Versi schema. Perubahan breaking menaikkan MAJOR. Lihat component-inventory.md § Schemas dan ADR-004 keputusan #4.",
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+
+    "taskId": {
+      "description": "Identitas task. Prefix menandai domain pengerjaan, contoh BE-101, FE-101, QA-207, WIRE-101.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]*-[0-9]+$"
+    },
+
+    "role": {
+      "description": "Tiga belas role agent. Sembilan pertama berasal dari §17-§25; empat terakhir ditambahkan ADR-005 untuk struktur project di luar backend+frontend. Nama ini juga menjadi nama file pada .claude/agents/<role>.md (§37), karena itu selalu kebab-case huruf kecil.",
+      "type": "string",
+      "enum": [
+        "project-manager",
+        "technical-lead-system-analyst",
+        "ui-ux-designer",
+        "backend-engineer",
+        "frontend-engineer",
+        "qa-engineer",
+        "code-reviewer",
+        "devops-release",
+        "technical-writer",
+        "fullstack-engineer",
+        "mobile-engineer",
+        "android-developer",
+        "ios-developer"
+      ]
+    },
+
+    "writerRole": {
+      "description": "Subset role yang boleh memegang reservasi path. Read-only agent tidak memerlukan reservasi (§30). Code Reviewer dikecualikan karena plan mode tanpa writable path (A-03). Project Manager dikecualikan karena write-nya terbatas control/** (Q11), bukan repo aplikasi.",
+      "type": "string",
+      "enum": [
+        "technical-lead-system-analyst",
+        "ui-ux-designer",
+        "backend-engineer",
+        "frontend-engineer",
+        "qa-engineer",
+        "devops-release",
+        "technical-writer",
+        "fullstack-engineer",
+        "mobile-engineer",
+        "android-developer",
+        "ios-developer"
+      ]
+    },
+
+    "taskStatus": {
+      "description": "State machine §33. Urutan tercantum pada dokumen arsitektur; schema hanya menegakkan keanggotaan, bukan transisinya.",
+      "type": "string",
+      "enum": [
+        "draft",
+        "needs-business-clarification",
+        "analysis-ready",
+        "technical-analysis",
+        "needs-technical-clarification",
+        "technical-ready",
+        "reserved",
+        "running",
+        "implementation-complete",
+        "reviewing",
+        "changes-requested",
+        "qa-testing",
+        "defect-found",
+        "ci-passed",
+        "merge-ready",
+        "merged",
+        "documented",
+        "staging-verified",
+        "released",
+        "cancelled",
+        "failed",
+        "superseded",
+        "blocked"
+      ]
+    },
+
+    "terminalStatus": {
+      "description": "Terminal states §33. Task pada status ini tidak berlanjut tanpa task baru.",
+      "type": "string",
+      "enum": ["cancelled", "failed", "superseded", "blocked"]
+    },
+
+    "reservationStatus": {
+      "description": "Siklus hidup reservasi. `reserved-pending-merge` berasal dari Q12 — reservasi ditahan sampai merge, bukan dilepas saat PR dibuat seperti teks §30. Lihat ADR-004 keputusan #3.",
+      "type": "string",
+      "enum": ["active", "reserved-pending-merge", "released", "cancelled"]
+    },
+
+    "handoffStatus": {
+      "description": "Status yang dilaporkan agent pada handoff (§35). Subset taskStatus yang mungkin dihasilkan satu sesi agent.",
+      "type": "string",
+      "enum": [
+        "implementation-complete",
+        "changes-requested",
+        "defect-found",
+        "blocked",
+        "failed"
+      ]
+    },
+
+    "pathGlob": {
+      "description": "Pola path relatif terhadap akar repository. Selalu memakai '/' sebagai pemisah. Tidak boleh absolut, tidak boleh memuat segmen '..'. Sufiks '/**' mencakup seluruh isi direktori secara rekursif. Batasan negatif ditulis sebagai `not` + pola sederhana, bukan lookahead, agar dapat dikompilasi Go RE2 sesuai ADR-004 keputusan #2.",
+      "type": "string",
+      "minLength": 1,
+      "allOf": [
+        { "not": { "pattern": "^/" } },
+        { "not": { "pattern": "(^|/)\\.\\.(/|$)" } }
+      ]
+    },
+
+    "repository": {
+      "description": "Nama repository tanpa owner, sesuai daftar repo pilot pada README.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+
+    "branchName": {
+      "description": "Nama branch git. Task branch mengikuti pola agent/<task-id>-<slug> (Q13). Batasan negatif ditulis tanpa lookahead agar kompatibel Go RE2 (ADR-004 #2).",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._/-]+$",
+      "allOf": [
+        { "not": { "pattern": "^/" } },
+        { "not": { "pattern": "/$" } },
+        { "not": { "pattern": "\\.\\." } },
+        { "not": { "pattern": "//" } }
+      ]
+    },
+
+    "agentBranchName": {
+      "description": "Branch kerja agent. Pola wajib agent/<task-id>-<slug> sesuai urutan runner pada Q13.",
+      "type": "string",
+      "pattern": "^agent/[A-Z][A-Z0-9]*-[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+
+    "baseBranch": {
+      "description": "Branch tujuan pull request. `main` hanya dapat di-merge manusia (ADR-001 keputusan #2).",
+      "type": "string",
+      "enum": ["develop", "staging", "main"]
+    },
+
+    "timestamp": {
+      "description": "Waktu dalam RFC 3339 / ISO 8601 dengan zona waktu eksplisit.",
+      "type": "string",
+      "format": "date-time"
+    },
+
+    "stopCondition": {
+      "description": "Keadaan yang mewajibkan agent berhenti dan mengembalikan status blocked (§34, §32).",
+      "type": "string",
+      "enum": [
+        "contract change required",
+        "dependency required",
+        "forbidden path required",
+        "migration required",
+        "data-loss risk found"
+      ]
+    },
+
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

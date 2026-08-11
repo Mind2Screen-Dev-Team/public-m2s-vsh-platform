@@ -1,0 +1,59 @@
+# TEMPLATE KANONIK — task contract (§34).
+#
+# Salin ke `control/tasks/specifications/<TASK-ID>.yaml`, lalu isi. Bentuk
+# normatifnya `schemas/task.schema.json`; template ini hanya kerangka. Validasi
+# sebelum launch:
+#
+#   scripts/validate-task.sh -task control/tasks/specifications/<TASK-ID>.yaml -control .
+#
+# Yang runner tolak dan schema tidak: base_branch `main` (ADR-001 #2), status
+# bukan `technical-ready` saat launch (H-07), contract_ids menunjuk berkas hilang
+# (H-06), dan paths yang melarang berkas scaffolding wajib (H-03).
+
+schema_version: "1.0"
+
+task:
+  id:                      # BE-101 — pola PREFIX-NUM
+  title:
+  type:                    # backend-implementation | frontend-implementation | design | integration | contract-change | …
+  project:
+  status: technical-ready  # launch menuntut technical-ready (H-07, §33)
+  requirement_ids: []      # REQ-*
+  business_rule_ids: []    # BR-*
+  contract_ids: []         # CONTRACT-* — berkas wajib ada di control/tasks/specifications/
+
+ownership:
+  role:                    # writerRole — backend-engineer, frontend-engineer, ui-ux-designer, …
+  repository:
+  base_branch: develop     # develop | staging. `main` ditolak runner (ADR-001 #2)
+  branch:                  # agent/<task-id>-<slug>
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 30
+  timeout_minutes: 45
+  # platform: darwin       # wajib bagi ios-developer (ADR-006 #3)
+  # scaffold: go           # go | nextjs — mengaktifkan H-03 scaffold realism
+
+paths:
+  allowed: []              # minimal satu path; dasar reserved_paths (§30)
+  forbidden:               # wajib memuat .claude/** dan .task/** (Q15)
+    - .claude/**
+    - .task/**
+
+# shared_file_ownership:   # setiap shared file §29.6 wajib punya satu owner
+#   - path: go.mod
+#     owner_task_id:
+#     owner_role:
+#     rationale:
+
+inputs: []                 # dokumen yang wajib dibaca agent, read-only
+
+acceptance_criteria: []    # minimal satu
+
+quality_gates: []          # perintah nyata, bukan nama gate abstrak
+
+outputs: []                # code | unit-tests | design-artifact | documentation | pull-request | …
+
+stop_conditions: []        # contract change required | dependency required | forbidden path required | …

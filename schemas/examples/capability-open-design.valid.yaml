@@ -1,0 +1,21 @@
+# Contoh capability terdaftar — §41.
+# Open Design (nexu-io) sebagai capability opsional UI/UX (§8, §72).
+
+schema_version: "1.0"
+name: open-design
+source: github.com/nexu-io/open-design
+version_or_commit: v0.1.0
+license: MIT
+reviewer: technical-lead-system-analyst
+approved_roles:
+  - ui-ux-designer
+allowed_tools:
+  - Read
+  - Write
+allowed_paths:
+  - design/**
+  - prototypes/**
+  - artifacts/**
+install_date: "2026-08-05T09:00:00Z"
+review_date: "2026-08-05T09:00:00Z"
+checksum_or_lock: open-design@v0.1.0.lock

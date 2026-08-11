@@ -1,0 +1,62 @@
+# BE-102 — Task Contract: Backend Status Endpoint
+
+schema_version: "1.0"
+
+task:
+  id: "BE-102"
+  title: "Implementasi GET /api/v1/status endpoint di backend Go"
+  type: "backend-implementation"
+  project: "pilot-phase-7"
+  status: "completed"
+  contract_ids: ["CONTRACT-102"]
+
+ownership:
+  role: "backend-developer"
+  repository: "m2s-vsh-project-backend"
+  base_branch: "main"
+  branch: "agent/BE-102-status-endpoint"
+
+execution:
+  isolation: "worktree"
+  background: true
+  max_turns: 100
+  timeout_minutes: 60
+
+paths:
+  allowed:
+    - "cmd/server/**"
+    - "internal/handler/**"
+    - "internal/handler/status_test.go"
+    - "go.mod"
+  forbidden:
+    - ".claude/**"
+    - ".task/**"
+    - "contracts/**"
+    - "go.sum"
+
+shared_file_ownership:
+  - path: "go.mod"
+    owner_task_id: "BE-102"
+    owner_role: "backend-developer"
+    rationale: "Task pertama yang menginisialisasi module Go pada repo seed-only (go mod init). BE-102 satu-satunya backend task, sehingga satu-satunya penulis go.mod."
+
+inputs:
+  - "contracts/CONTRACT-102.yaml"
+
+acceptance_criteria:
+  - "GET /api/v1/status mengembalikan 200 dengan JSON {status, version, uptime_seconds}"
+  - "Response schema sesuai CONTRACT-102"
+  - "Unit test untuk handler: 200 OK dan valid JSON"
+
+quality_gates:
+  - "go test ./internal/handler/..."
+  - "go vet ./..."
+
+outputs:
+  - "code"
+  - "unit-tests"
+  - "pull-request"
+
+stop_conditions:
+  - "Handler lulus go test"
+  - "Response cocok contract CONTRACT-102"

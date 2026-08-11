@@ -1,0 +1,54 @@
+# ── OS ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Secret & credential (HARD RULE — lihat arsitektur §16.5, §42.3) ───
+# Pola ini juga ditegakkan lewat permissions.deny dan PreToolUse hook.
+# .gitignore adalah lapisan terakhir, bukan satu-satunya.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets/
+**/secrets/
+*.token
+.netrc
+
+# ── Runtime task context (disuntikkan runner, tidak boleh di-commit) ──
+# Snapshot task contract yang dimaterialisasi runner ke dalam worktree.
+.task/
+
+# ── Worktree (defensif — lokasi default ada di luar repo) ─────────────
+.worktrees/
+.m2s-worktrees/
+# Q8/A-01 memindahkan worktree ke luar repo. Baris ini menjaga worktree
+# buatan tooling lain tidak ikut ter-commit sejak .claude/agents/ di-track.
+.claude/worktrees/
+
+# ── Log & artefak eksekusi ────────────────────────────────────────────
+*.log
+logs/
+control/reservations/*.lock
+tmp/
+.cache/
+
+# ── Output launcher pre-development (scripts/project-kickoff.sh) ───────
+# Dokumen pre-dev dihasilkan klien saat runtime, tidak di-commit.
+control/pre-dev/
+
+# ── Skill project-document-builder (runtime extract) ───────────────────
+# Di-extract oleh scripts/project-kickoff.sh dari templates/skills/ saat
+# runtime. Kanonik di templates/skills/, bukan di sini.
+.claude/skills/project-document-builder/
+
+# ── Binary runner: dibangun lokal, tidak di-commit (ADR-004 #5) ────────
+# Source ada di cmd/m2s/**. Bangun dengan `make build`.
+# Binary tidak dapat direview di PR dan terikat platform build-nya.
+bin/
+
+# ── Claude Code lokal (personal, tidak mengubah project behaviour) ────
+.claude/settings.local.json

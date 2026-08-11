@@ -1,0 +1,53 @@
+# CONTRACT-102 — Task Contract: API Contract
+
+schema_version: "1.0"
+
+task:
+  id: "CONTRACT-102"
+  title: "Tulis API contract untuk System Status endpoint"
+  type: "contract-change"
+  project: "pilot-phase-7"
+  status: "approved"
+  contract_ids: []
+
+ownership:
+  role: "technical-lead-system-analyst"
+  repository: "public-m2s-vsh-platform"
+  base_branch: "main"
+  branch: "agent/CONTRACT-102-contract"
+
+execution:
+  isolation: "worktree"
+  background: true
+  max_turns: 50
+  timeout_minutes: 30
+
+paths:
+  allowed:
+    - "contracts/CONTRACT-102.yaml"
+  forbidden:
+    - ".claude/**"
+    - ".task/**"
+    - "control/**"
+    - "docs/**"
+    - "cmd/**"
+    - "internal/**"
+    - "scripts/**"
+
+inputs:
+  - "schemas/task.schema.json"
+
+acceptance_criteria:
+  - "CONTRACT-102.yaml valid terhadap task.schema.json"
+  - "Response schema mencakup status, version, uptime_seconds"
+  - "Format sesuai RFC 9110 (HTTP Semantics)"
+
+quality_gates:
+  - "make verify"
+
+outputs:
+  - "pull-request"
+
+stop_conditions:
+  - "Contract sudah disetujui PM dan TL/SA"
+  - "Response schema lengkap dan valid"

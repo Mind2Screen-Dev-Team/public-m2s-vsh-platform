@@ -1,0 +1,56 @@
+# TEMPLATE KANONIK — handoff (§35).
+#
+# Agent tidak boleh hanya mengembalikan "selesai". Handoff tanpa test evidence
+# atau changed-file inventory dianggap incomplete. Bentuk normatifnya
+# `schemas/handoff.schema.json`; hook `validate-handoff.sh` memblokir
+# SubagentStop bila handoff tidak valid (fail-closed, exit 2).
+#
+# Runner menulis JSON-nya ke <worktree>/.task/handoff.json. Template ini bentuk
+# YAML yang dibaca manusia.
+
+schema_version: "1.0"
+
+task_id:                     # BE-101
+role:                        # role penghasil handoff
+status:                      # implementation-complete | changes-requested | defect-found | blocked | failed
+summary:                     # ringkasan yang dapat dibaca manusia — "selesai" tidak memenuhi §35
+
+changed_files:               # wajib ada; kosong hanya sah bagi role read-only
+  - path:
+    purpose:
+    # change_kind: added     # added | modified | deleted | renamed
+
+tests:
+  executed:                  # kosong menuntut not_executed_reason
+    - command:
+      result:                # passed | failed | skipped
+      # output_excerpt:      # WAJIB bila result failed
+  # not_executed_reason:
+
+# findings:                  # wajib bila status changes-requested atau defect-found
+#   - severity:              # blocker | major | minor | nit
+#     category:              # correctness | security | maintainability | test | scope | performance
+#     location:
+#       path:
+#       line:
+#     reason:
+#     recommended_action:
+#     # reproduction_steps: []   # wajib bagi defect QA (§22.8)
+
+# decision:                  # wajib bagi code-reviewer: approve | approve-with-nonblocking-notes | request-changes
+
+decisions: []                # keputusan teknis yang diambil selama pengerjaan
+assumptions: []
+risks: []
+unresolved: []
+
+contract_deviations: []      # array kosong = pernyataan eksplisit "tidak ada penyimpangan"
+  # - kind:                  # forbidden-path-needed | contract-change-needed | dependency-needed | …
+  #   detail:
+
+# blocked_reason:            # wajib bila status blocked atau failed
+#   stop_condition:
+#   detail:
+
+# pr_url:
+# completed_at:

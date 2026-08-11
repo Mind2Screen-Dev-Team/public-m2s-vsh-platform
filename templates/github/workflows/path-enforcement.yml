@@ -1,0 +1,218 @@
+# path-enforcement.yml — CI changed-path validation (§59), required check (§60).
+#
+# TEMPLATE KANONIK. Salin ke `.github/workflows/` pada repo aplikasi. Sumber
+# kebenaran ada di control repo; jangan sunting salinan di repo aplikasi.
+#
+# Mengapa CI, bukan hanya hook: hook lokal dapat dilewati agent lewat Bash
+# (R-07) atau elakan blocklist (R-08). CI mengulang pemeriksaan yang sama pada
+# path yang benar-benar berubah di PR — tidak dapat dilewati agent lokal. Ini
+# otoritas final atas batas path (risk-register R-07: "CI adalah otoritas final").
+#
+# ── Dua aturan bentuk yang WAJIB dipertahankan (ADR-007 #2, #3) ──────────
+#
+# 1. TIDAK ADA `if:` pada level job. Job yang di-skip GitHub tidak melaporkan
+#    status sama sekali. Sebagai required check, job ber-`if:` level job akan
+#    memblokir setiap PR yang tidak cocok — permanen, tanpa jalan keluar
+#    (ADR-001 § "tidak boleh diaktifkan lebih awal"). Ini gate palsu, kerabat
+#    R-24. Pemilahan branch dilakukan di DALAM step, bukan oleh `if:` job.
+#    Dijaga otomatis: `make verify-github`.
+#
+# 2. Trigger `merge_group` wajib ada. Tanpa itu, required check tidak pernah
+#    melapor saat PR masuk merge queue dan merge gagal selamanya. Merge queue
+#    sendiri belum aktif (org-only, ADR-007 #3) — trigger dipasang sekarang
+#    supaya aktivasi nanti tidak menuntut perubahan workflow.
+#
+# Nama job `validate-changed-paths` ADALAH nama required check. Mengubahnya
+# memutus branch protection yang sudah terpasang.
+#
+# ── Guard Phase 8 (phase-8-hardening.md) ─────────────────────────────────
+#
+# H-01  branch agent/* wajib target develop. Aktif hanya bila
+#       APPLICATION_REPO=true; control repo main-only sehingga mode agent tak
+#       pernah tercapai di sana.
+# H-02  pola branch dipisah eksplisit — agent/<task-id>-<slug> untuk task
+#       bercontract, worktree-<konteks> untuk planning. agent/* tanpa task-id
+#       ditolak; ia dulu lolos lalu gagal jauh kemudian saat contract dicari.
+# H-08  promosi integration hanya naik satu level: develop→staging→main.
+#       Step-nya gated pada base_ref, BUKAN pada mode, sehingga ia berlaku juga
+#       pada PR manusia. Karena itu step H-08 DIHAPUS dari salinan control repo
+#       — di sana ia akan menolak setiap PR worktree-* → main.
+
+name: path-enforcement
+
+on:
+  pull_request:
+    branches: [develop, staging]
+  merge_group:
+
+# Read-only: workflow ini hanya memvalidasi, tidak menulis apa pun ke repo.
+permissions:
+  contents: read
+
+jobs:
+  validate-changed-paths:
+    runs-on: ubuntu-latest
+    steps:
+      # Selalu jalan. Menentukan lingkup, tidak pernah di-skip, sehingga job
+      # selalu melaporkan status. Nama branch masuk lewat `env`, bukan
+      # interpolasi ${{ }} ke dalam shell — nama branch adalah input tak
+      # terpercaya dan dapat memuat metakarakter shell.
+      - name: Tentukan lingkup pemeriksaan
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          # H-01 hanya bermakna di repo aplikasi, yang punya develop/staging/
+          # main. Control repo main-only per konvensi dan branch-nya worktree-*,
+          # sehingga mode agent tidak pernah tercapai di sana. Nilainya ditulis
+          # eksplisit supaya beda perilaku antar-salinan terbaca di berkas,
+          # bukan tersembunyi sebagai step yang hilang.
+          APPLICATION_REPO: 'true'
+        run: |
+          set -u
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            # Batas yang diketahui: payload merge_group tidak memuat nama
+            # branch asal, sehingga task-id tak dapat diturunkan. Validasi
+            # path sudah dijalankan pada event pull_request untuk commit yang
+            # sama. Di sini kami melapor sukses supaya queue tidak deadlock.
+            echo "mode=merge-group" >> "$GITHUB_OUTPUT"
+            echo "task_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "$HEAD_REF" in
+            agent/*) ;;
+            worktree-*)
+              # H-02: branch planning/dokumentasi. Konvensi §44 memisahkan dua
+              # pola — `agent/<task-id>-<slug>` untuk task dengan contract,
+              # `worktree-<konteks>` untuk kerja tanpa contract. Dilaporkan
+              # sebagai mode tersendiri, bukan dilebur ke non-agent, supaya
+              # niat konvensinya terbaca pada ringkasan job dan branch planning
+              # yang salah memakai agent/* tetap tertangkap di bawah.
+              echo "mode=planning" >> "$GITHUB_OUTPUT"
+              echo "task_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              # PR manusia atau branch non-agent: tidak ada contract, tidak
+              # ada yang divalidasi. Lolos EKSPLISIT — bukan skip.
+              echo "mode=non-agent" >> "$GITHUB_OUTPUT"
+              echo "task_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          # Branch mengaku agent/*: pola §44 wajib dipenuhi.
+          task_id=$(printf '%s' "$HEAD_REF" \
+            | sed -n 's#^agent/\([A-Z][A-Z0-9]*-[0-9]\{1,\}\)-.*#\1#p')
+          if [ -z "$task_id" ]; then
+            echo "::error::branch '$HEAD_REF' tidak mengikuti pola agent/<task-id>-<slug> (§44)"
+            echo "mode=malformed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # H-01: agent/* hanya masuk lewat develop (§44 hirarki promosi).
+          # staging/main dicapai lewat promosi berurutan, bukan PR langsung
+          # dari branch task.
+          if [ "$APPLICATION_REPO" = "true" ] && [ "$BASE_REF" != "develop" ]; then
+            echo "::error::branch agent/* wajib target develop (§44); staging/main via promosi berurutan, bukan lompati develop"
+            echo "mode=wrong-base" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "mode=agent" >> "$GITHUB_OUTPUT"
+          echo "task_id=$task_id" >> "$GITHUB_OUTPUT"
+
+      # H-08: promosi branch integration hanya naik satu level (§44). develop
+      # boleh masuk staging; staging boleh masuk main; develop langsung ke main
+      # melompati gate dan ditolak. Tidak berlaku di control repo (main-only,
+      # APPLICATION_REPO=false) — step ini sengaja dihapus dari salinan control.
+      - name: Validasi promosi branch (integration)
+        if: github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'main')
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          set -u
+          case "$BASE" in
+            staging)
+              [ "$HEAD" = "develop" ] || {
+                echo "::error::promosi ke staging harus dari develop, bukan $HEAD (§44 hirarki)"
+                exit 1
+              }
+              ;;
+            main)
+              [ "$HEAD" = "staging" ] || {
+                echo "::error::promosi ke main harus dari staging, bukan $HEAD (§44 hirarki)"
+                exit 1
+              }
+              ;;
+          esac
+          echo "ok  promosi $HEAD → $BASE sah (§44)"
+
+      - name: Checkout PR
+        if: steps.scope.outputs.mode == 'agent'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout control repo
+        if: steps.scope.outputs.mode == 'agent'
+        uses: actions/checkout@v4
+        with:
+          repository: Mind2Screen-Dev-Team/public-m2s-vsh-platform
+          path: .control
+          fetch-depth: 1
+
+      - name: Setup Go
+        if: steps.scope.outputs.mode == 'agent'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: .control/go.mod
+
+      - name: Bangun runner
+        if: steps.scope.outputs.mode == 'agent'
+        working-directory: .control
+        run: make build
+
+      - name: Validasi changed path terhadap contract
+        if: steps.scope.outputs.mode == 'agent'
+        env:
+          TASK_ID: ${{ steps.scope.outputs.task_id }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -u
+          contract=".control/control/tasks/specifications/${TASK_ID}.yaml"
+          if [ ! -f "$contract" ]; then
+            echo "::error::contract $contract tidak ditemukan di control repo"
+            exit 1
+          fi
+          # Path yang berubah relatif base branch PR.
+          git diff --name-only "origin/${BASE_REF}...HEAD" > changed.txt
+          echo "changed files:"; cat changed.txt
+          # exit 2 = pelanggaran batas path (cmd/m2s/main.go exitViolation).
+          .control/bin/m2s validate-changed-paths -contract "$contract" -changed changed.txt
+
+      # Selalu jalan, termasuk ketika step di atas gagal. Membuat kesimpulan
+      # job terbaca manusia dan memastikan ada keluaran pada setiap jalur.
+      - name: Ringkasan
+        if: always()
+        env:
+          MODE: ${{ steps.scope.outputs.mode }}
+          TASK_ID: ${{ steps.scope.outputs.task_id }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -u
+          case "$MODE" in
+            agent)       msg="branch agent '$HEAD_REF' (task $TASK_ID) — batas path divalidasi terhadap contract" ;;
+            planning)    msg="branch '$HEAD_REF' pola worktree-* — planning/dokumentasi, tanpa contract, lolos (H-02)" ;;
+            non-agent)   msg="branch '$HEAD_REF' bukan agent/* — validasi batas path tidak berlaku, lolos" ;;
+            merge-group) msg="event merge_group — batas path sudah divalidasi pada PR untuk commit ini" ;;
+            malformed)   msg="branch '$HEAD_REF' mengaku agent/* tetapi tidak mengikuti pola §44 — DITOLAK" ;;
+            wrong-base)  msg="branch agent '$HEAD_REF' menargetkan '$BASE_REF', wajib develop (§44) — DITOLAK (H-01)" ;;
+            *)           msg="lingkup tidak dapat ditentukan — perlakukan sebagai gagal" ;;
+          esac
+          echo "path-enforcement: $msg"
+          echo "path-enforcement: $msg" >> "$GITHUB_STEP_SUMMARY"

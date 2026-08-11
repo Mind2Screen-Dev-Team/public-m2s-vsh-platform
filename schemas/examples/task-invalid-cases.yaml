@@ -1,0 +1,59 @@
+# Kasus yang WAJIB ditolak task.schema.json.
+# Dipakai sebagai basis uji negatif validate-task; setiap entri harus gagal
+# dengan alasan yang tercantum.
+
+cases:
+  - name: forbidden tanpa .claude/**
+    reason: paths.forbidden wajib memuat .claude/** (§20.5)
+    mutate: hapus ".claude/**" dari paths.forbidden
+
+  - name: forbidden tanpa .task/**
+    reason: agent dapat memalsukan contract-nya sendiri (Q15)
+    mutate: hapus ".task/**" dari paths.forbidden
+
+  - name: allowed kosong
+    reason: task tanpa writable path tidak dapat dieksekusi; minItems 1
+    mutate: paths.allowed = []
+
+  - name: path absolut
+    reason: path wajib relatif terhadap akar repository
+    mutate: paths.allowed = ["/etc/passwd"]
+
+  - name: path traversal
+    reason: '.. memungkinkan penulisan di luar worktree'
+    mutate: paths.allowed = ["../../other-repo/src/**"]
+
+  - name: role read-only sebagai pemilik
+    reason: code-reviewer plan mode tanpa writable path (A-03); bukan writerRole
+    mutate: ownership.role = "code-reviewer"
+
+  - name: branch tidak mengikuti pola agent/
+    reason: runner membuat branch agent/<task-id>-<slug> (Q13)
+    mutate: ownership.branch = "feature/close-payroll"
+
+  - name: base_branch main
+    reason: >-
+      diterima schema tetapi harus ditolak kebijakan runner — merge ke main
+      hanya manusia (ADR-001 #2). Dicatat sebagai batas schema, bukan bug.
+    mutate: ownership.base_branch = "main"
+    expect: valid-secara-schema
+
+  - name: status di luar state machine
+    reason: enum §33
+    mutate: task.status = "almost-done"
+
+  - name: shared_file_ownership tanpa owner
+    reason: R-04 menuntut owner tunggal yang eksplisit
+    mutate: hapus owner_task_id dari entri pertama
+
+  - name: field tak dikenal
+    reason: additionalProperties false — salah ketik harus gagal, bukan diabaikan
+    mutate: tambahkan "priority = high" pada root
+
+  - name: stop_conditions kosong
+    reason: agent tanpa stop condition tidak pernah berhenti saat menemui batas
+    mutate: stop_conditions = []
+
+  - name: schema_version salah
+    reason: const 1.0 — versi lain butuh migrasi eksplisit
+    mutate: schema_version = "2.0"

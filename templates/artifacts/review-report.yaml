@@ -1,0 +1,37 @@
+# TEMPLATE KANONIK — review report (§23.7).
+#
+# Hasil review independen Code Reviewer. Reviewer menjalankan plan mode tanpa
+# Write/Edit (A-03, Q9), sehingga changed_files WAJIB kosong. Bentuk normatifnya
+# `schemas/review-report.schema.json`; findings dan decision di-$ref dari
+# `schemas/handoff.schema.json`.
+
+schema_version: "1.0"
+
+task_id:
+role: code-reviewer
+status:                      # implementation-complete | changes-requested | defect-found
+summary:                     # ringkasan review yang dapat dibaca manusia
+
+findings:                    # wajib minimal satu bila decision request-changes
+  - severity:                # blocker | major | minor | nit
+    category:                # correctness | security | maintainability | test | scope | performance
+    location:
+      path:
+      line:
+    reason:
+    recommended_action:
+    # reproduction_steps: []   # untuk defect yang dapat direproduksi
+
+decision:                    # approve | approve-with-nonblocking-notes | request-changes
+
+changed_files: []            # WAJIB kosong — reviewer tidak mengubah berkas (§23.5)
+
+tests:
+  executed:                  # bukti eksekusi test/static analysis yang tidak mengubah file (§23.4)
+    - command:
+      result:                # passed | failed | skipped
+  # not_executed_reason:
+
+contract_deviations: []      # penyimpangan terhadap task contract yang ditemukan review
+
+# completed_at:

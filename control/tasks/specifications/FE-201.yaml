@@ -1,0 +1,62 @@
+# FE-201 — Task Contract: Sync Design System ke Frontend
+
+# Contoh task sync design untuk Phase 6 (spesifikasi referensi, status draft).
+# Menyalin design/DESIGN.md + design/tokens/** dari control repo ke frontend
+# repo, agar design system tersedia di frontend sbg dasar handoff.
+#
+# Path allowed menimpa template frontend-engineer yang forbid design/** secara
+# global: task contract > template (§15 rule precedence). Sync dilakukan agent
+# frontend-engineer pada repo frontend, bukan menulis lintas repo dari control.
+#
+# Catatan: id dipakai FE-201 karena taskId schema mewajibkan pola
+# PREFIX-NUM (FE-DESIGN-1 tidak valid).
+
+schema_version: "1.0"
+
+task:
+  id: FE-201
+  title: Salin design system ke frontend repo
+  type: frontend-implementation
+  project: pilot-phase-7
+  status: draft
+
+ownership:
+  role: frontend-engineer
+  repository: m2s-vsh-project-frontend
+  base_branch: develop
+  branch: agent/FE-201-sync-design-system
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 20
+  timeout_minutes: 30
+
+paths:
+  allowed:
+    - design/DESIGN.md
+    - design/tokens/tokens.md
+  forbidden:
+    - src/**
+    - .claude/**
+    - .task/**
+    - package.json
+    - package-lock.json
+
+inputs:
+  - design/handoff/DESIGN-1/handoff.md   # source: control repo (read)
+
+acceptance_criteria:
+  - design/DESIGN.md dan design/tokens/tokens.md tersedia di frontend repo
+  - Isi identik source control (sync murni, tanpa perubahan)
+  - Tidak menyentuh src/**
+
+quality_gates:
+  - find design -type f
+
+outputs:
+  - documentation
+
+stop_conditions:
+  - forbidden path required
+  - dependency required

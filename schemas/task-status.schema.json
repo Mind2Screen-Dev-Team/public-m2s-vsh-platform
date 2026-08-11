@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/task-status.schema.json",
+  "title": "M2S-VSH Task Status Snapshot",
+  "description": "Status terakhir satu task pada control/tasks/status/<task-id>.yaml (ADR-011). Snapshot status §33 saat ini, bukan riwayat transisi — riwayat ditulis schema terpisah task-state.schema.json. Ditulis runner pada titik deterministic (reserve-paths, launch-task, collect-result, release-reservation) atau agent lewat subcommand m2s update-status. Satu penulis per status (tabel owner ADR-011).",
+
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "task_id", "status", "updated_at", "by"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task_id": {
+      "$ref": "common.schema.json#/$defs/taskId",
+      "description": "Task pemilik status. Sama dengan <task-id> pada nama berkas."
+    },
+
+    "status": {
+      "$ref": "common.schema.json#/$defs/taskStatus",
+      "description": "Status §33 saat ini. Transisi diizinkan mengikuti state machine §33, ditegakkan runner (m2s update-status), bukan schema — schema hanya menegakkan keanggotaan."
+    },
+
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp",
+      "description": "Waktu transisi terakhir (RFC 3339 dengan zona)."
+    },
+
+    "by": {
+      "$ref": "common.schema.json#/$defs/role",
+      "description": "Role yang menulis status ini. Selalu nilai enum role — runner menulis sebagai role pemilik task, agent menulis sebagai role-nya sendiri. Tabel owner per status pada ADR-011."
+    },
+
+    "reason": {
+      "description": "Alasan transisi, opsional. Dapat dipakai untuk changes-requested/defect-found/cancelled/failed/superseded/blocked.",
+      "$ref": "common.schema.json#/$defs/nonEmptyString"
+    }
+  }
+}

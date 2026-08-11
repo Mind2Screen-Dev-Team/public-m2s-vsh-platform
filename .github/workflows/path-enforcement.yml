@@ -1,0 +1,146 @@
+# path-enforcement.yml — CI changed-path validation (§59), required check (§60).
+#
+# Ini salinan CONTROL REPO. Template kanonik ada di
+# `templates/github/workflows/path-enforcement.yml`; perubahan dimulai di sana,
+# lalu diturunkan ke sini dan ke repo aplikasi. `make verify-github` memeriksa
+# keduanya tetap sejalan pada aturan bentuk.
+#
+# ── Koreksi Phase 4 ──────────────────────────────────────────────────────
+#
+# Versi Phase 3 dari berkas ini TIDAK PERNAH BERJALAN. Trigger-nya
+# `pull_request: branches: [develop, staging]`, sedangkan control repo hanya
+# punya `main` (open-questions §"Belum dikerjakan": control repo hanya punya
+# main; kebutuhan develop/staging belum diputuskan). `actions/runs`
+# mengembalikan total_count 0. Jadi klaim "CI live" pada Phase 3 tidak akurat:
+# berkasnya ada, jalurnya mati. Trigger diperbaiki ke `main` di bawah.
+#
+# Job juga memakai `if:` level job, yang membuatnya tidak dapat dijadikan
+# required check — lihat aturan bentuk di template kanonik. Sudah dihapus.
+#
+# ── Perilaku di control repo ─────────────────────────────────────────────
+#
+# Branch di control repo adalah `worktree-*` per fase, bukan `agent/*`, dan
+# tidak punya task contract. Jadi mode `non-agent` adalah jalur normal di sini:
+# job melapor SUKSES dengan pesan eksplisit. Itulah buktinya bahwa job ini
+# aman dijadikan required check — ia melapor, bukan di-skip.
+
+name: path-enforcement
+
+on:
+  pull_request:
+    branches: [main]
+  merge_group:
+
+# Read-only: workflow ini hanya memvalidasi, tidak menulis apa pun ke repo.
+permissions:
+  contents: read
+
+jobs:
+  validate-changed-paths:
+    runs-on: ubuntu-latest
+    steps:
+      # Selalu jalan. Nama branch masuk lewat `env`, bukan interpolasi ${{ }}
+      # ke dalam shell — nama branch adalah input tak terpercaya.
+      - name: Tentukan lingkup pemeriksaan
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          # Control repo main-only per konvensi, sehingga H-01 tidak berlaku.
+          APPLICATION_REPO: 'false'
+        run: |
+          set -u
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            echo "mode=merge-group" >> "$GITHUB_OUTPUT"
+            echo "task_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          case "$HEAD_REF" in
+            agent/*) ;;
+            worktree-*)
+              # H-02: branch planning/dokumentasi — jalur normal di control repo.
+              echo "mode=planning" >> "$GITHUB_OUTPUT"
+              echo "task_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            *)
+              echo "mode=non-agent" >> "$GITHUB_OUTPUT"
+              echo "task_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+          esac
+
+          task_id=$(printf '%s' "$HEAD_REF" \
+            | sed -n 's#^agent/\([A-Z][A-Z0-9]*-[0-9]\{1,\}\)-.*#\1#p')
+          if [ -z "$task_id" ]; then
+            echo "::error::branch '$HEAD_REF' tidak mengikuti pola agent/<task-id>-<slug> (§44)"
+            echo "mode=malformed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          # H-01: tidak menyala di sini (APPLICATION_REPO=false) — control repo
+          # main-only, mode agent tak pernah tercapai.
+          if [ "$APPLICATION_REPO" = "true" ] && [ "$BASE_REF" != "develop" ]; then
+            echo "::error::branch agent/* wajib target develop (§44); staging/main via promosi berurutan, bukan lompati develop"
+            echo "mode=wrong-base" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "mode=agent" >> "$GITHUB_OUTPUT"
+          echo "task_id=$task_id" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR
+        if: steps.scope.outputs.mode == 'agent'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        if: steps.scope.outputs.mode == 'agent'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Bangun runner
+        if: steps.scope.outputs.mode == 'agent'
+        run: make build
+
+      # Di control repo, contract berada di repo yang sama — tidak perlu
+      # checkout kedua seperti pada template repo aplikasi.
+      - name: Validasi changed path terhadap contract
+        if: steps.scope.outputs.mode == 'agent'
+        env:
+          TASK_ID: ${{ steps.scope.outputs.task_id }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -u
+          contract="control/tasks/specifications/${TASK_ID}.yaml"
+          if [ ! -f "$contract" ]; then
+            echo "::error::contract $contract tidak ditemukan"
+            exit 1
+          fi
+          git diff --name-only "origin/${BASE_REF}...HEAD" > changed.txt
+          echo "changed files:"; cat changed.txt
+          # exit 2 = pelanggaran batas path (cmd/m2s/main.go exitViolation).
+          ./bin/m2s validate-changed-paths -contract "$contract" -changed changed.txt
+
+      - name: Ringkasan
+        if: always()
+        env:
+          MODE: ${{ steps.scope.outputs.mode }}
+          TASK_ID: ${{ steps.scope.outputs.task_id }}
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -u
+          case "$MODE" in
+            agent)       msg="branch agent '$HEAD_REF' (task $TASK_ID) — batas path divalidasi terhadap contract" ;;
+            planning)    msg="branch '$HEAD_REF' pola worktree-* — planning/dokumentasi, tanpa contract, lolos (H-02)" ;;
+            non-agent)   msg="branch '$HEAD_REF' bukan agent/* — validasi batas path tidak berlaku, lolos" ;;
+            merge-group) msg="event merge_group — batas path sudah divalidasi pada PR untuk commit ini" ;;
+            malformed)   msg="branch '$HEAD_REF' mengaku agent/* tetapi tidak mengikuti pola §44 — DITOLAK" ;;
+            wrong-base)  msg="branch agent '$HEAD_REF' menargetkan '$BASE_REF', wajib develop (§44) — DITOLAK (H-01)" ;;
+            *)           msg="lingkup tidak dapat ditentukan — perlakukan sebagai gagal" ;;
+          esac
+          echo "path-enforcement: $msg"
+          echo "path-enforcement: $msg" >> "$GITHUB_STEP_SUMMARY"

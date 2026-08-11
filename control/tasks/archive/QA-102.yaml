@@ -1,0 +1,55 @@
+# QA-102 — Task Contract: Integration Test
+
+schema_version: "1.0"
+
+task:
+  id: "QA-102"
+  title: "Acceptance + integration test untuk System Status"
+  type: "integration"
+  project: "pilot-phase-7"
+  status: "completed"
+  contract_ids: ["CONTRACT-102"]
+
+ownership:
+  role: "quality-assurance"
+  repository: "public-m2s-vsh-platform"
+  base_branch: "main"
+  branch: "agent/QA-102-integration"
+
+execution:
+  isolation: "worktree"
+  background: true
+  max_turns: 80
+  timeout_minutes: 45
+
+paths:
+  allowed:
+    - "qa/CONTRACT-102/**"
+  forbidden:
+    - ".claude/**"
+    - ".task/**"
+    - "contracts/**"
+    - "control/**"
+    - "docs/**"
+    - "cmd/**"
+    - "internal/**"
+
+inputs:
+  - "contracts/CONTRACT-102.yaml"
+
+acceptance_criteria:
+  - "Integration test memverifikasi GET /api/v1/status response cocok contract"
+  - "Test mencakup: 200 OK, JSON structure, field types"
+  - "Test mencakup: error handling (server mati)"
+
+quality_gates:
+  - "make verify"
+
+outputs:
+  - "integration-tests"
+  - "test-report"
+  - "pull-request"
+
+stop_conditions:
+  - "Integration test mencakup semua acceptance criteria"
+  - "Test report lengkap dan valid"

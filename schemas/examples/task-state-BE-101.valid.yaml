@@ -1,0 +1,10 @@
+# Contoh transisi status task — §33.
+# BE-101 dari technical-analysis ke technical-ready oleh TL/SA.
+
+schema_version: "1.0"
+task_id: BE-101
+from: technical-analysis
+to: technical-ready
+at: "2026-08-05T12:00:00Z"
+by: technical-lead-system-analyst
+note: Analisis teknis selesai, contract disetujui TL/SA.

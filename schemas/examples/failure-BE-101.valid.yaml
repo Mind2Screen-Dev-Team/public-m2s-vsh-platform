@@ -1,0 +1,15 @@
+# Contoh failure report valid — §54.
+# Kegagalan task BE-101: dependency unavailable (kategori §53).
+
+schema_version: "1.0"
+category: dependency unavailable
+task_id: BE-101
+last_successful_step: kompilasi modul payroll lulus
+affected_files:
+  - internal/payroll/usecase/close_period.go
+command: go test ./internal/payroll/...
+error_summary: "package github.com/x/ratelimit: module lookup disabled oleh kebijakan offline"
+safe_to_retry: true
+rollback_performed: false
+recommended_owner: backend-engineer
+completed_at: "2026-08-05T10:00:00Z"

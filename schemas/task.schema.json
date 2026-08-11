@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/task.schema.json",
+  "title": "M2S-VSH Task Contract",
+  "description": "Kontrak satu task agent. Ditulis YAML pada control/tasks/specifications/, dimaterialisasi runner menjadi <worktree>/.task/contract.json (Q15, ADR-004). Schema ini adalah definisi normatif; contoh YAML pada §34 bersifat ilustratif.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task", "ownership", "execution", "paths", "acceptance_criteria", "quality_gates", "outputs", "stop_conditions"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "type", "project", "status"],
+      "properties": {
+        "id": { "$ref": "common.schema.json#/$defs/taskId" },
+        "title": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "type": {
+          "description": "Jenis pekerjaan. Menentukan role mana yang wajar memilikinya, tetapi tidak menggantikan ownership.role.",
+          "type": "string",
+          "enum": [
+            "backend-implementation",
+            "frontend-implementation",
+            "fullstack-implementation",
+            "mobile-implementation",
+            "integration",
+            "bugfix",
+            "refactor",
+            "test-authoring",
+            "design",
+            "documentation",
+            "devops",
+            "contract-change"
+          ]
+        },
+        "project": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "status": { "$ref": "common.schema.json#/$defs/taskStatus" },
+        "requirement_ids": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "business_rule_ids": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "contract_ids": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "repository", "base_branch", "branch"],
+      "properties": {
+        "role": {
+          "$ref": "common.schema.json#/$defs/writerRole",
+          "description": "Role pemilik task. Terbatas pada writer role — read-only agent tidak memerlukan task contract dengan reservasi (§30)."
+        },
+        "repository": { "$ref": "common.schema.json#/$defs/repository" },
+        "base_branch": { "$ref": "common.schema.json#/$defs/baseBranch" },
+        "branch": { "$ref": "common.schema.json#/$defs/agentBranchName" }
+      }
+    },
+
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isolation", "max_turns", "timeout_minutes"],
+      "properties": {
+        "isolation": {
+          "description": "Selalu worktree untuk write task (§58, Q13). Nilai tunggal dipertahankan agar perluasan di masa depan tidak breaking.",
+          "type": "string",
+          "enum": ["worktree"]
+        },
+        "background": { "type": "boolean", "default": true },
+        "platform": {
+          "description": "Prasyarat sistem operasi runner. `darwin` wajib bagi task ios-developer karena xcodebuild tidak tersedia di platform lain. Runner menolak exit 2 bila runtime.GOOS tidak cocok, sebelum worktree dibuat (ADR-006 #3). Opsional; tanpa field ini artinya `any`.",
+          "type": "string",
+          "enum": ["any", "darwin", "linux"],
+          "default": "any"
+        },
+        "scaffold": {
+          "description": "Menandai task sebagai pembuatan kerangka proyek pada stack tertentu. Bila ada, runner menuntut paths.allowed menampung berkas yang scaffolding-nya pasti hasilkan — `go mod init` selalu menulis go.mod, `create-next-app` selalu menulis src/app/layout.tsx dan globals.css. Contract yang melarangnya membuat agent memilih antara menaati contract atau menyelesaikan task, dan itu terjadi pada Phase 7 (phase-8-hardening.md H-03). Opt-in: tanpa field ini task bukan scaffolding dan tidak diperiksa, sehingga task pada repo yang sudah berdiri tetap boleh melarang go.mod.",
+          "type": "string",
+          "enum": ["go", "nextjs"]
+        },
+        "max_turns": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "timeout_minutes": { "type": "integer", "minimum": 1, "maximum": 480 }
+      }
+    },
+
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowed", "forbidden"],
+      "properties": {
+        "allowed": {
+          "description": "Path yang boleh ditulis agent. Menjadi dasar reserved_paths pada reservation (§30).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/pathGlob" }
+        },
+        "forbidden": {
+          "description": "Path yang tidak boleh ditulis. Wajib memuat .claude/** dan .task/** — yang terakhir mencegah agent memalsukan contract-nya sendiri (Q15).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "common.schema.json#/$defs/pathGlob" },
+          "allOf": [
+            { "contains": { "const": ".claude/**" } },
+            { "contains": { "const": ".task/**" } }
+          ]
+        }
+      }
+    },
+
+    "shared_file_ownership": {
+      "description": "Menutup R-04. §29.6 mendaftar shared file tetapi §34 tidak menyediakan tempat mencatat pemiliknya. Setiap shared file yang disentuh task ini wajib menyebut satu owner tunggal; hanya task milik owner tersebut yang boleh menulisnya.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "owner_task_id", "owner_role"],
+        "properties": {
+          "path": {
+            "$ref": "common.schema.json#/$defs/pathGlob",
+            "description": "Path shared file. Umumnya exact file, bukan glob."
+          },
+          "owner_task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+          "owner_role": { "$ref": "common.schema.json#/$defs/writerRole" },
+          "rationale": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        }
+      }
+    },
+
+    "inputs": {
+      "description": "Dokumen yang wajib dibaca agent sebelum bekerja. Read-only.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/pathGlob" }
+    },
+
+    "acceptance_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "quality_gates": {
+      "description": "Perintah gate per task, tidak di-hardcode runner (Q4). Untuk repo Go umumnya memanggil target make, bukan perintah go mentah.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "code",
+          "unit-tests",
+          "integration-tests",
+          "e2e-tests",
+          "implementation-report",
+          "review-report",
+          "test-report",
+          "design-artifact",
+          "documentation",
+          "pull-request"
+        ]
+      }
+    },
+
+    "stop_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/stopCondition" }
+    }
+  }
+}

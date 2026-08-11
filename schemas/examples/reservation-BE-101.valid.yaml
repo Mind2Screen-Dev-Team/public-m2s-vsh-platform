@@ -1,0 +1,45 @@
+# Contoh reservasi aktif. Diturunkan dari §30, disesuaikan Q8 (lokasi worktree),
+# Q12 (siklus status), dan R-04 (shared_file_ownership).
+#
+# Divalidasi terhadap schemas/reservation.schema.json.
+
+schema_version: "1.0"
+
+task_id: BE-101
+repository: m2s-vsh-project-backend
+branch: agent/BE-101-close-payroll
+
+# DI LUAR repository (Q8) — bukan .claude/worktrees/ seperti contoh §30,
+# karena .claude/** adalah forbidden path (A-01).
+worktree: /Users/candra/.m2s/worktrees/m2s-vsh-project-backend/BE-101
+
+allowed_paths:
+  - internal/payroll/**
+
+# Sama dengan allowed pada task ini. Dipisahkan karena §30 membedakan
+# keduanya — reservasi boleh mengunci lebih sempit daripada yang diizinkan.
+reserved_paths:
+  - internal/payroll/**
+
+forbidden_paths:
+  - migrations/**
+  - internal/auth/**
+  - go.mod
+  - go.sum
+  - app/injector/**
+  - gen/**
+  - .claude/**
+  - .mneme/**
+  - .task/**
+
+shared_file_ownership:
+  - path: internal/payroll/enum.go
+    owner_task_id: BE-101
+    owner_role: backend-engineer
+    rationale: >-
+      Enum status periode ditambah pada task ini. BE-102 membaca tetapi
+      tidak menulis.
+
+status: active
+owner_role: backend-engineer
+created_at: "2026-07-30T09:15:00+07:00"

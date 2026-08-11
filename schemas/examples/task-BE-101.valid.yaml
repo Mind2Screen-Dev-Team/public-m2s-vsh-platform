@@ -1,0 +1,88 @@
+# Contoh task contract yang valid.
+# Diturunkan dari §34, disesuaikan dengan Q4 (repo Go: unit test colocated,
+# gate memanggil target make) dan ADR-002 (app/injector milik task WIRE).
+#
+# Divalidasi terhadap schemas/task.schema.json.
+
+schema_version: "1.0"
+
+task:
+  id: BE-101
+  title: Implement close payroll period
+  type: backend-implementation
+  project: tumbuh
+  status: technical-ready
+  requirement_ids:
+    - REQ-PAY-004
+  business_rule_ids:
+    - BR-PAY-012
+    - BR-PAY-013
+  contract_ids:
+    - CONTRACT-PAY-003
+
+ownership:
+  role: backend-engineer
+  repository: m2s-vsh-project-backend
+  base_branch: develop
+  branch: agent/BE-101-close-payroll
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 30
+  timeout_minutes: 45
+
+paths:
+  allowed:
+    # Unit test colocated sebagai _test.go, sehingga tercakup pola ini (Q4).
+    - internal/payroll/**
+  forbidden:
+    - migrations/**
+    - internal/auth/**
+    - go.mod
+    - go.sum
+    # Milik task WIRE, bukan task domain (ADR-002).
+    - app/injector/**
+    # Hasil generator; regenerasi hanya lewat make (Q4).
+    - gen/**
+    - .claude/**
+    - .mneme/**
+    # Mencegah agent memalsukan contract-nya sendiri (Q15).
+    - .task/**
+
+shared_file_ownership:
+  - path: internal/payroll/enum.go
+    owner_task_id: BE-101
+    owner_role: backend-engineer
+    rationale: >-
+      Enum status periode ditambah pada task ini. BE-102 membaca tetapi
+      tidak menulis.
+
+inputs:
+  - docs/system-analysis/payroll-close.md
+  - contracts/openapi/payroll.yaml
+  - docs/adr/ADR-014-payroll-snapshot.md
+
+acceptance_criteria:
+  - Close operation is idempotent
+  - Closed period cannot be modified
+  - Existing payroll tests remain passing
+
+quality_gates:
+  - make fmt
+  - make vet
+  - make test-payroll
+  - path-scope-check
+
+outputs:
+  - code
+  - unit-tests
+  - implementation-report
+  - pull-request
+
+stop_conditions:
+  - contract change required
+  - dependency required
+  - forbidden path required
+  - migration required
+  - data-loss risk found

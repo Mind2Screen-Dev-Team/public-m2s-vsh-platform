@@ -1,0 +1,56 @@
+# CONTRACT-201 — Task Contract: Multi-Component Status API Contract
+
+schema_version: "1.0"
+
+task:
+  id: CONTRACT-201
+  title: "Tulis API contract multi-component status (perluas GET /api/v1/status)"
+  type: contract-change
+  project: pilot-phase-7
+  status: technical-ready
+  contract_ids: []
+
+ownership:
+  role: technical-lead-system-analyst
+  repository: public-m2s-vsh-platform
+  base_branch: develop
+  branch: agent/CONTRACT-201-multi-status-contract
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 50
+  timeout_minutes: 30
+
+paths:
+  allowed:
+    - contracts/CONTRACT-201.yaml
+  forbidden:
+    - .claude/**
+    - .task/**
+    - control/**
+    - docs/**
+    - cmd/**
+    - internal/**
+    - scripts/**
+
+inputs:
+  - schemas/task.schema.json
+  - contracts/CONTRACT-201.yaml
+
+acceptance_criteria:
+  - "CONTRACT-201.yaml valid terhadap task.schema.json"
+  - "Response schema backward-compat: status, version, uptime_seconds dipertahankan"
+  - "Tambah services array: 3 komponen (backend-api, database, auth)"
+  - "Per komponen: status, version, uptime, last_checked (RFC 3339), latency_ms, message"
+  - "Format sesuai RFC 9110 (HTTP Semantics)"
+
+quality_gates:
+  - make verify
+
+outputs:
+  - pull-request
+  - documentation
+
+stop_conditions:
+  - "contract change required"

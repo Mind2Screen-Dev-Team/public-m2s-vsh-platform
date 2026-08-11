@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/capability.schema.json",
+  "title": "M2S-VSH External Capability",
+  "description": "Daftar capability eksternal yang disetujui (§41). Tidak ada agent yang boleh melakukan dynamic install saat task berjalan; setiap capability harus terdaftar dan disetujui lebih dulu. Dokumen registry/referensi — belum menjadi Kind validator runner. Registry nyata (governance/capability-registry.yaml) adalah human-only-write.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "source", "version_or_commit", "license", "reviewer", "approved_roles", "install_date"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "name": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Nama capability — identik dengan kunci registry."
+    },
+
+    "source": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Asal capability (repository/registry/URL). Public package wajib source review sebelum masuk (§9.3)."
+    },
+
+    "version_or_commit": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Version pin. Version floating dilarang untuk package yang sudah disetujui (§9.4)."
+    },
+
+    "license": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Lisensi — license review wajib sebelum install (§9.4)."
+    },
+
+    "reviewer": {
+      "$ref": "common.schema.json#/$defs/role",
+      "description": "Role yang menilai relevance dan overlap (§9.4)."
+    },
+
+    "approved_roles": {
+      "description": "Role yang boleh memakai capability ini. Kosong berarti tak ada yang boleh — capability tak terpakai.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/role" }
+    },
+
+    "allowed_tools": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+    },
+
+    "allowed_paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/pathGlob" },
+      "description": "MCP write path dibatasi, mis. design/**, prototypes/**, artifacts/** (§8.3)."
+    },
+
+    "install_date": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "review_date": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "checksum_or_lock": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Checksum atau lockfile untuk verifikasi integritas (§41)."
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/task-state.schema.json",
+  "title": "M2S-VSH Task State Transition",
+  "description": "Peristiwa transisi status task, cerminan state machine §33. Task individual memakai task.schema.json (status di common.schema.json#/$defs/taskStatus); schema ini mencatat transisi antar status untuk registry/audit. Dokumen registry/referensi — belum menjadi Kind validator runner.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "from", "to", "at"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+
+    "from": {
+      "$ref": "common.schema.json#/$defs/taskStatus",
+      "description": "Status sebelum transisi. `draft` adalah status awal §33."
+    },
+
+    "to": {
+      "$ref": "common.schema.json#/$defs/taskStatus",
+      "description": "Status setelah transisi. Terminal: cancelled, failed, superseded, blocked."
+    },
+
+    "at": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "by": {
+      "$ref": "common.schema.json#/$defs/role",
+      "description": "Role yang memicu transisi. Transisi oleh runner ditulis sebagai role pemilik task."
+    },
+
+    "note": {
+      "$ref": "common.schema.json#/$defs/nonEmptyString",
+      "description": "Alasan transisi."
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "Transisi ke status terminal (§33) wajib menyebut alasan — task yang berhenti tanpa sebab tidak dapat ditindak.",
+      "if": {
+        "properties": { "to": { "$ref": "common.schema.json#/$defs/terminalStatus" } },
+        "required": ["to"]
+      },
+      "then": {
+        "required": ["note"]
+      }
+    }
+  ]
+}

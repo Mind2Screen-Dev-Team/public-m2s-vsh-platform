@@ -1,0 +1,31 @@
+# Contoh review report valid — §23.7.
+# Code Reviewer approve dengan dua finding minor.
+
+schema_version: "1.0"
+task_id: BE-101
+role: code-reviewer
+status: implementation-complete
+summary: Implementasi sesuai contract; dua catatan non-blocking.
+findings:
+  - severity: minor
+    category: maintainability
+    location:
+      path: internal/payroll/usecase/close_period.go
+      line: 42
+    reason: Fungsi berulang untuk validasi periode di tiga cabang.
+    recommended_action: Ekstrak helper validasi periode.
+  - severity: nit
+    category: test
+    location:
+      path: internal/payroll/usecase/close_period_test.go
+      line: 18
+    reason: Nama test tidak menyebut skenario edge.
+    recommended_action: Rename agar menyebut kasus closed-period.
+decision: approve
+changed_files: []
+tests:
+  executed:
+    - command: go test ./internal/payroll/...
+      result: passed
+contract_deviations: []
+completed_at: "2026-08-05T11:00:00Z"

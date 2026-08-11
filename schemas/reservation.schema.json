@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://m2s-vsh.mindtoscreen.dev/schemas/reservation.schema.json",
+  "title": "M2S-VSH Path Reservation",
+  "description": "Satu reservasi path aktif. Ditulis runner ke control/reservations/<task-id>.yaml sebelum sesi agent dimulai (§30, Q13). Human-only write bagi agent. Aturan konflik antar reservasi didefinisikan docs/decisions/path-overlap-matrix.md, bukan schema ini — schema hanya menegakkan bentuk.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "repository", "branch", "worktree", "allowed_paths", "reserved_paths", "forbidden_paths", "status", "owner_role", "created_at"],
+
+  "properties": {
+    "schema_version": {
+      "$ref": "common.schema.json#/$defs/schemaVersion",
+      "const": "1.0"
+    },
+
+    "task_id": {
+      "$ref": "common.schema.json#/$defs/taskId",
+      "description": "Task pemilik reservasi. Nama file reservasi mengikuti id ini."
+    },
+
+    "repository": { "$ref": "common.schema.json#/$defs/repository" },
+
+    "branch": {
+      "$ref": "common.schema.json#/$defs/agentBranchName",
+      "description": "Branch kerja agent, dibuat runner (Q13)."
+    },
+
+    "worktree": {
+      "description": "Path absolut worktree. Berada DI LUAR repository, default $HOME/.m2s/worktrees/<repository>/<task-id>, dapat di-override M2S_WORKTREE_ROOT (Q8). Bukan .claude/worktrees/ seperti contoh §30 — lihat ADR-004 #3. Schema hanya menolak pola anti-pattern §30 yang eksplisit; jaminan 'di luar repository' ditegakkan runner, karena hanya runner yang mengetahui lokasi repository.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^/",
+      "allOf": [
+        { "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
+        {
+          "not": { "pattern": "/\\.claude/worktrees(/|$)" },
+          "description": "Anti-pattern §30: worktree di dalam .claude/** yang merupakan forbidden path (A-01, Q8)."
+        }
+      ]
+    },
+
+    "allowed_paths": {
+      "description": "Salinan paths.allowed dari task contract. Disimpan agar reservasi dapat diaudit tanpa membaca contract.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/pathGlob" }
+    },
+
+    "reserved_paths": {
+      "description": "Path yang benar-benar dikunci reservasi ini. Umumnya sama dengan allowed_paths, tetapi dipisahkan karena §30 membedakan keduanya: reservasi dapat mengunci lebih sempit daripada yang diizinkan. Inilah himpunan yang diperiksa terhadap reservasi lain menggunakan aturan path-overlap-matrix.md.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/pathGlob" }
+    },
+
+    "forbidden_paths": {
+      "description": "Salinan paths.forbidden dari task contract. Diperiksa LEBIH DULU daripada allowed (matriks §4.8).",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/pathGlob" }
+    },
+
+    "shared_file_ownership": {
+      "description": "Salinan dari task contract (R-04). Menegakkan §29.6: satu shared file hanya boleh satu owner aktif. Dua reservasi yang mengklaim owner berbeda atas path yang sama adalah konflik, meski reserved_paths keduanya tidak beririsan secara glob (matriks §4.6).",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "owner_task_id", "owner_role"],
+        "properties": {
+          "path": { "$ref": "common.schema.json#/$defs/pathGlob" },
+          "owner_task_id": { "$ref": "common.schema.json#/$defs/taskId" },
+          "owner_role": { "$ref": "common.schema.json#/$defs/writerRole" },
+          "rationale": { "$ref": "common.schema.json#/$defs/nonEmptyString" }
+        }
+      }
+    },
+
+    "status": {
+      "$ref": "common.schema.json#/$defs/reservationStatus",
+      "description": "active → reserved-pending-merge → released. Status antara berasal dari Q12: reservasi ditahan sampai merge, bukan dilepas saat PR dibuat seperti teks §30 (ADR-004 #3). Menutup A-05."
+    },
+
+    "owner_role": {
+      "$ref": "common.schema.json#/$defs/writerRole",
+      "description": "Role pemegang reservasi. Read-only agent tidak memerlukan reservasi (§30); code-reviewer karena itu tidak dapat muncul di sini (A-03)."
+    },
+
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "pr_url": {
+      "description": "Diisi saat status berpindah ke reserved-pending-merge.",
+      "type": "string",
+      "pattern": "^https://github\\.com/[^/]+/[^/]+/pull/[0-9]+$"
+    },
+
+    "released_at": {
+      "$ref": "common.schema.json#/$defs/timestamp",
+      "description": "Diisi saat status menjadi released atau cancelled, yaitu setelah merge (Q12)."
+    },
+
+    "released_by": {
+      "description": "Stale reservation hanya boleh dibersihkan runner atau manusia, bukan worker (§30).",
+      "type": "string",
+      "enum": ["runner", "human"]
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "reserved-pending-merge menuntut pr_url — status ini justru menandai PR sudah ada tetapi belum ter-merge.",
+      "if": { "properties": { "status": { "const": "reserved-pending-merge" } }, "required": ["status"] },
+      "then": {
+        "required": ["pr_url"],
+        "properties": { "pr_url": true }
+      }
+    },
+    {
+      "description": "released dan cancelled menuntut jejak siapa yang melepas dan kapan (§30).",
+      "if": { "properties": { "status": { "enum": ["released", "cancelled"] } }, "required": ["status"] },
+      "then": {
+        "required": ["released_at", "released_by"],
+        "properties": { "released_at": true, "released_by": true }
+      }
+    },
+    {
+      "description": "active belum boleh memuat jejak pelepasan.",
+      "if": { "properties": { "status": { "const": "active" } }, "required": ["status"] },
+      "then": {
+        "allOf": [
+          { "not": { "required": ["released_at"], "properties": { "released_at": true } } },
+          { "not": { "required": ["released_by"], "properties": { "released_by": true } } }
+        ]
+      }
+    }
+  ]
+}

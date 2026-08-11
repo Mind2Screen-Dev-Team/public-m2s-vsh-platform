@@ -1,0 +1,56 @@
+# CONTRACT-202 — Task Contract: Dashboard Design Handoff Contract
+
+schema_version: "1.0"
+
+task:
+  id: CONTRACT-202
+  title: "Tulis handoff contract dashboard multi-status (CONTRACT-202)"
+  type: contract-change
+  project: pilot-phase-7
+  status: technical-ready
+  contract_ids: []
+
+ownership:
+  role: technical-lead-system-analyst
+  repository: public-m2s-vsh-platform
+  base_branch: develop
+  branch: agent/CONTRACT-202-dashboard-handoff-contract
+
+execution:
+  isolation: worktree
+  background: true
+  max_turns: 50
+  timeout_minutes: 30
+
+paths:
+  allowed:
+    - contracts/CONTRACT-202.yaml
+  forbidden:
+    - .claude/**
+    - .task/**
+    - control/**
+    - docs/**
+    - cmd/**
+    - internal/**
+    - scripts/**
+
+inputs:
+  - schemas/task.schema.json
+  - design/handoff/DESIGN-1/contract.yaml   # template pola handoff contract
+
+acceptance_criteria:
+  - "CONTRACT-202.yaml valid terhadap task.schema.json"
+  - "Mirror pola design/handoff/DESIGN-1/contract.yaml"
+  - "Referensi silang fe_task: FE-202"
+  - "Components: StatusCard, StatusDashboard"
+  - "States: loading, empty, success, error"
+
+quality_gates:
+  - make verify
+
+outputs:
+  - pull-request
+  - documentation
+
+stop_conditions:
+  - "contract change required"
