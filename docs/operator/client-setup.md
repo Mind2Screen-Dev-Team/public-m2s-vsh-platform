@@ -284,6 +284,47 @@ dari user, lalu mengatur alur menuju kontrak task:
 Skill aktif setelah dipasang ke `.claude/skills/` (langkah 3). Jalankan dengan
 `/project-start` atau berikan ringkasan/deskripsi project ke sesi Claude.
 
+### 12. Alur Lengkap Initiate Setup Repo Aplikasi
+
+Ringkasan seluruh alur menyiapkan repo aplikasi, dari nol sampai siap
+dikerjakan agent. **Kunci: repo aplikasi diinisiasi oleh manusia — bukan
+agent.** Agent dan skill `/project-start` baru masuk setelah repo aplikasi
+sudah ada dan berisi boilerplate.
+
+```
+1. Manusia buat repo aplikasi di org klien
+   → <KLIEN-ORGANIZATION>/<nama-repo-aplikasi>
+   (backend, frontend, mobile, fullstack, android, ios — bebas sesuai formasi)
+
+2. Manusia inisiasi boilerplate + struktur project
+   → clone dari control repository, ganti referensi ke org klien
+   (go.mod, import path, workflow repository:, CODEOWNERS, README)
+   → isi struktur sesuai teknologi stack yang dipakai
+
+3. Sinkronkan template (langkah 3)
+   → cp templates/github/{CODEOWNERS,PULL_REQUEST_TEMPLATE.md,
+     workflows/path-enforcement.yml} ke .github/ repo aplikasi
+   → workflow `repository:` menunjuk control repository klien
+     (titik hubung CI aplikasi ↔ control)
+
+4. Tim Mind2Screen setup identitas penegakan (langkah 4-6)
+   → GitHub App m2s-worker / m2s-approver di-install ke repo aplikasi
+   → ruleset / perlindungan branch develop, staging, main
+
+5. Skill /project-start cek repo aplikasi (hard-gate)
+   → repo ada + berisi? → lolos → lanjut ke pipeline
+   → repo kosong / belum ada → berhenti, minta manusia inisiasi dulu
+
+6. Pipeline jalan
+   → agent engineer masuk, WAJIB baca struktur repo aktual dulu
+     (aturan baru di def role engineer — boilerplate bisa dikustom manusia,
+     bukan asumsi template)
+```
+
+**Ringkas:** manusia buat repo → manusia isi boilerplate → sinkron template →
+tim M2S setup App + aturan branch → skill `/project-start` cek (lolos) →
+pipeline.
+
 ---
 
 ## Bagian 3 — Ringkasan Cara Kerja untuk Klien
