@@ -105,12 +105,34 @@ spawn_agent() {
   fi
   # Hapus handoff lama agar tidak terbaca ulang
   rm -f "$wt/.task/handoff.json"
-  # Spawn claude di worktree; agent kerja + tulis .task/handoff.json
-  (cd "$wt" && printf '%s' "$prompt" \
+  # Spawn claude di worktree. Agent read-only (mis. code-reviewer) menghasilkan
+  # structured output (handoff) di stdout, bukan menulis file. Runner tangkap
+  # stdout, ekstrak blok JSON/YAML handoff, dan tuliskan ke .task/handoff.json
+  # (Q9: "runner yang menuliskannya"). Implementer yang punya Edit/Write juga
+  # menulis file langsung — dua jalur aman untuk path yang sama: bila file sudah
+  # terbentuk di worktree, output stdout tidak menggantikannya.
+  local out
+  out="$(cd "$wt" && printf '%s' "$prompt" \
     | claude --print \
         --model "$model" \
         --allowedTools "$tools" \
-    > /dev/null) || true
+        2>/dev/null || true)"
+  # Ekstrak handoff: prioritas blok ```json/```yaml, lalu blok JSON {} valid tunggal.
+  local extracted=""
+  if [[ -n "$out" ]]; then
+    extracted="$(printf '%s' "$out" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' | sed '/^[[:space:]]*$/d' | python3 -c "
+import json,sys
+t=sys.stdin.read()
+try:
+    d=json.loads(t)
+    print(json.dumps(d,ensure_ascii=False))
+except Exception:
+    sys.exit(1)
+" 2>/dev/null || true)"
+  fi
+  if [[ -n "$extracted" ]] && [[ ! -f "$wt/.task/handoff.json" ]]; then
+    printf '%s\n' "$extracted" > "$wt/.task/handoff.json"
+  fi
   # Verifikasi handoff terbentuk
   [[ -f "$wt/.task/handoff.json" ]] || {
     step_log "WARN: $role tidak menulis .task/handoff.json — handoff kosong"

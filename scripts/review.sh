@@ -41,11 +41,27 @@ $dry_run && echo "[dry-run] launch-review --task $task"
 
 echo "[review:$task] spawn code-reviewer model=$MODEL"
 $dry_run || rm -f "$WT/.task/handoff.json"
-$dry_run || (cd "$WT" && printf '%s' \
-  "Kamu adalah code-reviewer. Review diff PR task $task (read-only).
+# Reviewer read-only menghasilkan handoff di stdout; runner tangkap + tulis
+# ke .task/handoff.json (Q9: "runner yang menuliskannya"). Bila file sudah ada
+# (jalur agent dengan Edit/Write), tidak ditimpa.
+$dry_run || {
+  REVIEW_OUT="$(cd "$WT" && printf '%s' \
+    "Kamu adalah code-reviewer. Review diff PR task $task (read-only).
 Baca .task/contract.json. Tulis review report ke .task/handoff.json
 (role code-reviewer, wajib: decision, changed_files: [], tests, findings bila request-changes)." \
-  | claude --print --model "$MODEL" --allowedTools "$TOOLS" > /dev/null) || true
+    | claude --print --model "$MODEL" --allowedTools "$TOOLS" 2>/dev/null || true)"
+  if [[ -n "$REVIEW_OUT" ]] && [[ ! -f "$WT/.task/handoff.json" ]]; then
+    printf '%s' "$REVIEW_OUT" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' \
+      | sed '/^[[:space:]]*$/d' \
+      | python3 -c "
+import json,sys
+try:
+    print(json.dumps(json.load(sys.stdin),ensure_ascii=False))
+except Exception:
+    sys.exit(1)
+" > "$WT/.task/handoff.json" 2>/dev/null || true
+  fi
+}
 $dry_run && echo "[dry-run] claude --print --model $MODEL --allowedTools $TOOLS"
 
 echo "[review:$task] collect-review"
