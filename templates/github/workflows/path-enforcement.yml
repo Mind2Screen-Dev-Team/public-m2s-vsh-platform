@@ -162,6 +162,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Mind2Screen-Dev-Team/public-m2s-vsh-platform
+          ref: develop
           path: .control
           fetch-depth: 1
 
