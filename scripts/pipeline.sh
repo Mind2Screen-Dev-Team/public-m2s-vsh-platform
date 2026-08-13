@@ -292,7 +292,7 @@ Setelah selesai:
 1. Commit semua perubahan ke branch $BRANCH.
 2. Push branch: git push origin $BRANCH.
 3. Buat PR ke develop: gh pr create --base develop --title \"[task $task]\" --body \"Implementasi $task\".
-4. Keluarkan handoff sebagai blok JSON tunggal (```json ... ```) di STDOUT — JANGAN
+4. Keluarkan handoff sebagai blok JSON tunggal (\`\`\`json ... \`\`\`) di STDOUT — JANGAN
    mencoba menulis file .task/handoff.json (path .task/** deny untuk agent).
    Runner yang menangkap stdout dan menuliskan .task/handoff.json.
    WAJIB bentuk field berikut (lihat schemas/examples/handoff-BE-101.valid.yaml):
@@ -423,7 +423,7 @@ done
 
 PROMPT_QA="Kamu adalah qa-engineer. Verifikasi implementasi task $task.
 Baca .task/contract.json: jalankan quality_gates dan verifikasi acceptance_criteria.
-Keluarkan handoff sebagai blok JSON tunggal (```json ... ```) di STDOUT — JANGAN
+Keluarkan handoff sebagai blok JSON tunggal (\`\`\`json ... \`\`\`) di STDOUT — JANGAN
 mencoba menulis file .task/handoff.json (path .task/** deny untuk agent).
 Runner yang menangkap stdout dan menuliskan .task/handoff.json.
 WAJIB bentuk field:
