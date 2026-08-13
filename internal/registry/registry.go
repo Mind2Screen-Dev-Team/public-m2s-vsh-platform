@@ -262,6 +262,17 @@ func (r *Registry) Transition(taskID, to string, fields map[string]any) error {
 	}
 	from := res.Status()
 
+	// Idempoten: transisi ke status yang sama adalah no-op. Fix loop (collect-result
+	// iterasi kedua) menulis reserved-pending-merge padahal reservation sudah
+	// pending-merge dari iterasi pertama — tanpa guard ini ditolak.
+	if from == to {
+		doc := res.Doc
+		for k, v := range fields {
+			doc[k] = v
+		}
+		return r.Put(doc)
+	}
+
 	allowed := map[string][]string{
 		StatusActive:               {StatusReservedPendingMerge, StatusCancelled},
 		StatusReservedPendingMerge: {StatusReleased, StatusCancelled},
