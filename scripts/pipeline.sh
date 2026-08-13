@@ -131,15 +131,28 @@ if 'tests' in d:
             elif result == 'skip':
                 t['result'] = 'skipped'
 
-# 3. findings: pastikan struktur konsisten
+# 3. findings: pastikan struktur konsisten + severity/category enum valid
 if 'findings' in d:
+    sev_map = {'critical': 'blocker', 'blocker': 'blocker', 'major': 'major',
+               'medium': 'major', 'minor': 'minor', 'low': 'minor', 'nit': 'nit',
+               'high': 'major', 'info': 'nit', 'warning': 'minor', 'error': 'blocker'}
+    cat_map = {'contract-violation': 'scope', 'schema-mismatch': 'correctness',
+               'robustness': 'maintainability', 'cleanup': 'maintainability',
+               'refactor': 'maintainability', 'correctness': 'correctness',
+               'security': 'security', 'maintainability': 'maintainability',
+               'test': 'test', 'scope': 'scope', 'performance': 'performance',
+               'bug': 'correctness', 'logic': 'correctness', 'style': 'maintainability'}
     fixed = []
     for f in d['findings']:
         # Pastikan field wajib ada
         if 'severity' not in f:
             f['severity'] = 'nit'
+        else:
+            f['severity'] = sev_map.get(str(f['severity']).lower(), 'minor')
         if 'category' not in f:
             f['category'] = 'maintainability'
+        else:
+            f['category'] = cat_map.get(str(f['category']).lower(), 'maintainability')
         if 'location' not in f:
             f['location'] = {
                 'path': f.get('path', f.get('file', '')),
