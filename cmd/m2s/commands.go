@@ -535,6 +535,14 @@ func cmdCollectResult(args []string) int {
 	// ditangani collect-review (ADR-012) agar gate implementation-complete
 	// tetap berlaku.
 	if handoffStatus != "" {
+		// State machine §33 fix loop: changes-requested → running → implementation-complete.
+		// Bila status sekarang changes-requested, tulis running (runner-owned) dulu.
+		cur, _ := st.Read(taskID)
+		if cur != nil && cur.Status() == "changes-requested" && handoffStatus == "implementation-complete" {
+			if err := writeStatus(st, taskID, "running", role, nil); err != nil {
+				return fail(exitError, "%v", err)
+			}
+		}
 		if err := writeStatus(st, taskID, handoffStatus, role, nil); err != nil {
 			return fail(exitError, "%v", err)
 		}
