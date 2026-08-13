@@ -292,7 +292,9 @@ Setelah selesai:
 1. Commit semua perubahan ke branch $BRANCH.
 2. Push branch: git push origin $BRANCH.
 3. Buat PR ke develop: gh pr create --base develop --title \"[task $task]\" --body \"Implementasi $task\".
-4. Tulis handoff ke .task/handoff.json sesuai schemas/handoff.schema.json.
+4. Keluarkan handoff sebagai blok JSON tunggal (```json ... ```) di STDOUT — JANGAN
+   mencoba menulis file .task/handoff.json (path .task/** deny untuk agent).
+   Runner yang menangkap stdout dan menuliskan .task/handoff.json.
    WAJIB bentuk field berikut (lihat schemas/examples/handoff-BE-101.valid.yaml):
    - schema_version: \"1.0\"
    - task_id: \"$task\"
@@ -377,6 +379,13 @@ while true; do
   $dry_run && step_dry "m2s launch-review --task $task --control $control"
   $dry_run || "$M2S_BIN" launch-review --task "$task" --control "$control"
 
+  # Advance status implementation-complete → reviewing (runner) SEBELUM spawn
+  # reviewer, agar collect-review memulai transisi dari reviewing. State machine
+  # §33 menolak lompatan implementation-complete → changes-requested.
+  step_log "phase 4: set status reviewing (runner)"
+  $dry_run && step_dry "m2s update-status -task $task -status reviewing -by runner"
+  $dry_run || "$M2S_BIN" update-status -task "$task" -status reviewing -by runner
+
   step_log "phase 4: spawn code-reviewer model=$(agent_model code-reviewer)"
   spawn_agent "code-reviewer" "$WT" "$PROMPT_REVIEW"
 
@@ -414,7 +423,9 @@ done
 
 PROMPT_QA="Kamu adalah qa-engineer. Verifikasi implementasi task $task.
 Baca .task/contract.json: jalankan quality_gates dan verifikasi acceptance_criteria.
-Tulis handoff ke .task/handoff.json (schema: schemas/handoff.schema.json, role qa-engineer).
+Keluarkan handoff sebagai blok JSON tunggal (```json ... ```) di STDOUT — JANGAN
+mencoba menulis file .task/handoff.json (path .task/** deny untuk agent).
+Runner yang menangkap stdout dan menuliskan .task/handoff.json.
 WAJIB bentuk field:
 - schema_version: \"1.0\", task_id: \"$task\", role: \"qa-engineer\"
 - status: \"implementation-complete\" bila lulus, \"defect-found\" bila ada defect
