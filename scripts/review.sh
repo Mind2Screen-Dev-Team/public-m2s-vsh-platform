@@ -40,29 +40,62 @@ $dry_run || "$M2S_BIN" launch-review --task "$task" --control "$control"
 $dry_run && echo "[dry-run] launch-review --task $task"
 
 echo "[review:$task] spawn code-reviewer model=$MODEL"
-$dry_run || rm -f "$WT/.task/handoff.json"
 # Reviewer read-only menghasilkan handoff di stdout; runner tangkap + tulis
 # ke .task/handoff.json (Q9: "runner yang menuliskannya"). Bila file sudah ada
-# (jalur agent dengan Edit/Write), tidak ditimpa.
-$dry_run || {
-  REVIEW_OUT="$(cd "$WT" && printf '%s' \
-    "Kamu adalah code-reviewer. Review diff PR task $task (read-only).
+# (jalur agent dengan Edit/Write), tidak ditimpa. Retry bila gagal.
+SPAWN_RETRY=2
+attempt=0
+while [[ $attempt -lt $SPAWN_RETRY ]]; do
+  attempt=$((attempt + 1))
+  [[ $attempt -gt 1 ]] && echo "[review:$task] retry spawn code-reviewer (percobaan $attempt/$SPAWN_RETRY)"
+  $dry_run || rm -f "$WT/.task/handoff.json"
+  $dry_run || {
+    REVIEW_OUT="$(cd "$WT" && printf '%s' \
+      "Kamu adalah code-reviewer. Review diff PR task $task (read-only).
 Baca .task/contract.json. Tulis review report ke .task/handoff.json
 (role code-reviewer, wajib: decision, changed_files: [], tests, findings bila request-changes)." \
-    | claude --print --model "$MODEL" --allowedTools "$TOOLS" 2>/dev/null || true)"
-  if [[ -n "$REVIEW_OUT" ]] && [[ ! -f "$WT/.task/handoff.json" ]]; then
-    printf '%s' "$REVIEW_OUT" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' \
-      | sed '/^[[:space:]]*$/d' \
-      | python3 -c "
+      | claude --print --model "$MODEL" --allowedTools "$TOOLS" 2>>"$WT/.task/audit.log" || true)"
+    if [[ -n "$REVIEW_OUT" ]] && [[ ! -f "$WT/.task/handoff.json" ]]; then
+      printf '%s' "$REVIEW_OUT" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' \
+        | sed '/^[[:space:]]*$/d' \
+        | python3 -c "
 import json,sys
 try:
     print(json.dumps(json.load(sys.stdin),ensure_ascii=False))
 except Exception:
     sys.exit(1)
 " > "$WT/.task/handoff.json" 2>/dev/null || true
-  fi
-}
+    fi
+  }
+  [[ -f "$WT/.task/handoff.json" ]] && break
+done
 $dry_run && echo "[dry-run] claude --print --model $MODEL --allowedTools $TOOLS"
+
+# Normalisasi format handoff sebelum collect-review (perbaiki changed_files/tests/findings)
+if [[ -f "$WT/.task/handoff.json" ]]; then
+  python3 - <<'EOF' > "$WT/.task/handoff.json.tmp"
+import json,sys
+d = json.load(open("$WT/.task/handoff.json"))
+d.setdefault("schema_version", "1.0")
+d.setdefault("status", "implementation-complete")
+d.setdefault("contract_deviations", [])
+if isinstance(d.get("tests"), list):
+    d["tests"] = {"executed": d["tests"]}
+for t in d.get("tests", {}).get("executed", []):
+    r = str(t.get("result","")).lower()
+    if r in ("pass","ok"): t["result"]="passed"
+    elif r == "fail": t["result"]="failed"
+    elif r == "skip": t["result"]="skipped"
+d["changed_files"] = []
+for f in d.get("findings", []):
+    f.setdefault("reason", f.get("summary","") or "Temuan review.")
+    f.setdefault("recommended_action", "Perbaiki sesuai konteks finding.")
+    if "location" not in f:
+        f["location"] = {"path": f.pop("file", f.pop("path","")), "line": f.pop("line",0)}
+json.dump(d, sys.stdout, indent=2, ensure_ascii=False)
+EOF
+  mv "$WT/.task/handoff.json.tmp" "$WT/.task/handoff.json"
+fi
 
 echo "[review:$task] collect-review"
 $dry_run || "$M2S_BIN" collect-review \

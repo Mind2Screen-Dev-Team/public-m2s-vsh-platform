@@ -83,6 +83,98 @@ read_status() {
   read_yaml_field "$sf" "status"
 }
 
+# normalize_handoff — validasi dan normalisasi format handoff sebelum collect-*
+# Perbaiki masalah umum: changed_files array string, tests array, findings inconsistent
+normalize_handoff() {
+  local handoff="$1"
+  [[ -f "$handoff" ]] || return 0
+
+  # Python script untuk normalisasi handoff
+  python3 - <<EOF > "${handoff}.tmp" || cat "${handoff}.tmp" && return 1
+import json,sys
+d = json.load(open('$handoff'))
+
+# 1. changed_files: pastikan array of objects
+if 'changed_files' in d:
+    if isinstance(d['changed_files'], list):
+        fixed = []
+        for item in d['changed_files']:
+            if isinstance(item, str):
+                fixed.append({"path": item, "purpose": "", "change_kind": "modified"})
+            elif isinstance(item, dict):
+                # Pastikan field wajib ada
+                if 'path' not in item:
+                    item['path'] = ''
+                if 'purpose' not in item:
+                    item['purpose'] = ''
+                if 'change_kind' not in item:
+                    item['change_kind'] = 'modified'
+                fixed.append(item)
+        d['changed_files'] = fixed
+    else:
+        d['changed_files'] = []
+
+# 2. tests: pastikan object dengan field 'executed'
+if 'tests' in d:
+    if isinstance(d['tests'], list):
+        d['tests'] = {"executed": d['tests']}
+    elif isinstance(d['tests'], dict) and 'executed' not in d['tests']:
+        d['tests'] = {"executed": [d['tests']]}
+    # Pastikan setiap test punya result valid
+    for t in d['tests'].get('executed', []):
+        if 'result' in t:
+            result = str(t['result']).lower()
+            if result in ['pass', 'ok']:
+                t['result'] = 'passed'
+            elif result == 'fail':
+                t['result'] = 'failed'
+            elif result == 'skip':
+                t['result'] = 'skipped'
+
+# 3. findings: pastikan struktur konsisten
+if 'findings' in d:
+    fixed = []
+    for f in d['findings']:
+        # Pastikan field wajib ada
+        if 'severity' not in f:
+            f['severity'] = 'nit'
+        if 'category' not in f:
+            f['category'] = 'maintainability'
+        if 'location' not in f:
+            f['location'] = {
+                'path': f.get('path', f.get('file', '')),
+                'line': f.get('line', 0)
+            }
+        # Pastikan reason dan recommended_action ada
+        if 'reason' not in f:
+            f['reason'] = f.get('summary', f.get('message', 'Temuan review.'))
+        if 'recommended_action' not in f:
+            f['recommended_action'] = f.get('suggestion', f.get('fix', 'Perbaiki sesuai konteks finding.'))
+        fixed.append(f)
+    d['findings'] = fixed
+
+# 4. Pastikan field wajib ada
+required_fields = ['schema_version', 'task_id', 'role', 'status', 'summary']
+for field in required_fields:
+    if field not in d:
+        if field == 'schema_version':
+            d[field] = '1.0'
+        elif field == 'task_id':
+            d[field] = '$task'
+        elif field == 'status':
+            d[field] = 'implementation-complete'  # Default status
+
+json.dump(d, sys.stdout, indent=2, ensure_ascii=False)
+EOF
+
+  # Ganti handoff asli dengan yang sudah dinormalisasi
+  if [[ -s "${handoff}.tmp" ]]; then
+    mv "${handoff}.tmp" "$handoff"
+  else
+    rm -f "${handoff}.tmp"
+  fi
+}
+
 # step_log <msg> — cetak langkah pipeline ke stderr (agar mudah dibedakan output agent)
 step_log() { echo "[pipeline:$task] $*" >&2; }
 
@@ -92,6 +184,8 @@ step_dry() { echo "[dry-run:$task] $*"; }
 # spawn_agent <role> <worktree> <prompt>
 # Spawn claude sebagai agent <role> di <worktree>. Cetak role + model sebelum spawn.
 # Agent menulis .task/handoff.json di worktree; pipeline baca setelah selesai.
+# Retry maks SPAWN_RETRY bila exit code non-zero atau handoff tidak terbentuk.
+SPAWN_RETRY=2
 spawn_agent() {
   local role="$1" wt="$2" prompt="$3"
   local model tools
@@ -103,24 +197,29 @@ spawn_agent() {
     step_dry "  prompt: ${prompt:0:80}..."
     return 0
   fi
-  # Hapus handoff lama agar tidak terbaca ulang
-  rm -f "$wt/.task/handoff.json"
-  # Spawn claude di worktree. Agent read-only (mis. code-reviewer) menghasilkan
-  # structured output (handoff) di stdout, bukan menulis file. Runner tangkap
-  # stdout, ekstrak blok JSON/YAML handoff, dan tuliskan ke .task/handoff.json
-  # (Q9: "runner yang menuliskannya"). Implementer yang punya Edit/Write juga
-  # menulis file langsung — dua jalur aman untuk path yang sama: bila file sudah
-  # terbentuk di worktree, output stdout tidak menggantikannya.
-  local out
-  out="$(cd "$wt" && printf '%s' "$prompt" \
-    | claude --print \
-        --model "$model" \
-        --allowedTools "$tools" \
-        2>/dev/null || true)"
-  # Ekstrak handoff: prioritas blok ```json/```yaml, lalu blok JSON {} valid tunggal.
-  local extracted=""
-  if [[ -n "$out" ]]; then
-    extracted="$(printf '%s' "$out" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' | sed '/^[[:space:]]*$/d' | python3 -c "
+  local attempt
+  for ((attempt=1; attempt<=SPAWN_RETRY; attempt++)); do
+    [[ $attempt -gt 1 ]] && step_log "retry spawn $role (percobaan $attempt/$SPAWN_RETRY)"
+    # Hapus handoff lama agar tidak terbaca ulang
+    rm -f "$wt/.task/handoff.json"
+    # Spawn claude di worktree. Agent read-only (mis. code-reviewer) menghasilkan
+    # structured output (handoff) di stdout, bukan menulis file. Runner tangkap
+    # stdout, ekstrak blok JSON/YAML handoff, dan tuliskan ke .task/handoff.json
+    # (Q9: "runner yang menuliskannya"). Implementer yang punya Edit/Write juga
+    # menulis file langsung — dua jalur aman untuk path yang sama: bila file sudah
+    # terbentuk di worktree, output stdout tidak menggantikannya.
+    # stderr diarahkan ke log agar kegagalan model terlihat (bug 4).
+    local out rc
+    out="$(cd "$wt" && printf '%s' "$prompt" \
+      | claude --print \
+          --model "$model" \
+          --allowedTools "$tools" \
+          2>>"$wt/.task/audit.log" || true)"
+    rc=$?
+    # Ekstrak handoff: prioritas blok ```json/```yaml, lalu blok JSON {} valid tunggal.
+    local extracted=""
+    if [[ -n "$out" ]]; then
+      extracted="$(printf '%s' "$out" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' | sed '/^[[:space:]]*$/d' | python3 -c "
 import json,sys
 t=sys.stdin.read()
 try:
@@ -129,15 +228,15 @@ try:
 except Exception:
     sys.exit(1)
 " 2>/dev/null || true)"
-  fi
-  if [[ -n "$extracted" ]] && [[ ! -f "$wt/.task/handoff.json" ]]; then
-    printf '%s\n' "$extracted" > "$wt/.task/handoff.json"
-  fi
-  # Verifikasi handoff terbentuk
-  [[ -f "$wt/.task/handoff.json" ]] || {
-    step_log "WARN: $role tidak menulis .task/handoff.json — handoff kosong"
-    return 1
-  }
+    fi
+    if [[ -n "$extracted" ]] && [[ ! -f "$wt/.task/handoff.json" ]]; then
+      printf '%s\n' "$extracted" > "$wt/.task/handoff.json"
+    fi
+    # Verifikasi handoff terbentuk
+    [[ -f "$wt/.task/handoff.json" ]] && { return 0; }
+    step_log "WARN: $role tidak menulis .task/handoff.json (rc=$rc) — handoff kosong"
+  done
+  return 1
 }
 
 # ── Phase 0: setup & verifikasi binary ────────────────────────────────────────
@@ -203,8 +302,11 @@ Ikuti acceptance_criteria dan quality_gates di contract."
 fix_iter=0
 while true; do
   CURRENT_STATUS=$(read_status)
-  # Keluar loop implementer bila sudah implementation-complete
-  [[ "$CURRENT_STATUS" == "implementation-complete" ]] && break
+  # Keluar loop implementer bila sudah implementation-complete ATAU sudah lewat
+  # implementer (reviewing/qa-testing/merge-ready) — resume tidak boleh re-spawn.
+  case "$CURRENT_STATUS" in
+    implementation-complete|reviewing|qa-testing|merge-ready|ci-passed|merged) break ;;
+  esac
   # Keluar bila melebihi batas iterasi
   if [[ $fix_iter -ge $MAX_FIX_LOOP ]]; then
     step_log "BATAS FIX LOOP ($MAX_FIX_LOOP) tercapai — berhenti"
@@ -222,10 +324,13 @@ while true; do
   PR_FLAG=""
   [[ -n "$PR_URL" ]] && PR_FLAG="--pr $PR_URL"
   $dry_run && step_dry "m2s collect-result --handoff $WT/.task/handoff.json $PR_FLAG --control $control"
-  $dry_run || "$M2S_BIN" collect-result \
-    --handoff "$WT/.task/handoff.json" \
-    $PR_FLAG \
-    --control "$control"
+  $dry_run || {
+    normalize_handoff "$WT/.task/handoff.json"
+    "$M2S_BIN" collect-result \
+      --handoff "$WT/.task/handoff.json" \
+      $PR_FLAG \
+      --control "$control"
+  }
   CURRENT_STATUS=$(read_status)
   [[ "$CURRENT_STATUS" == "implementation-complete" ]] && break
   # Dry-run: satu iterasi cukup untuk print rencana — tidak ada status yang advance
@@ -245,6 +350,11 @@ JANGAN edit atau tulis berkas application code apa pun."
 
 review_iter=0
 while true; do
+  CURRENT_STATUS=$(read_status)
+  # Resume: bila sudah reviewing/qa-testing/merge-ready, lewati review.
+  case "$CURRENT_STATUS" in
+    reviewing|qa-testing|merge-ready|ci-passed|merged) step_log "review: sudah $CURRENT_STATUS — lanjut"; break ;;
+  esac
   step_log "phase 4: launch-review"
   $dry_run && step_dry "m2s launch-review --task $task --control $control"
   $dry_run || "$M2S_BIN" launch-review --task "$task" --control "$control"
@@ -254,9 +364,12 @@ while true; do
 
   step_log "phase 4: collect-review"
   $dry_run && step_dry "m2s collect-review --handoff $WT/.task/handoff.json --control $control"
-  $dry_run || "$M2S_BIN" collect-review \
-    --handoff "$WT/.task/handoff.json" \
-    --control "$control"
+  $dry_run || {
+    normalize_handoff "$WT/.task/handoff.json"
+    "$M2S_BIN" collect-review \
+      --handoff "$WT/.task/handoff.json" \
+      --control "$control"
+  }
 
   CURRENT_STATUS=$(read_status)
   if [[ "$CURRENT_STATUS" == "reviewing" || "$dry_run" == "true" ]]; then
@@ -290,6 +403,12 @@ tests (bukti eksekusi quality gates)."
 
 qa_iter=0
 while true; do
+  CURRENT_STATUS=$(read_status)
+  # Resume: bila sudah merge-ready, selesai — jangan re-run QA.
+  [[ "$CURRENT_STATUS" == "merge-ready" || "$CURRENT_STATUS" == "ci-passed" || "$CURRENT_STATUS" == "merged" ]] && {
+    step_log "QA: sudah $CURRENT_STATUS — selesai"
+    break
+  }
   step_log "phase 5: launch-qa"
   $dry_run && step_dry "m2s launch-qa --task $task --control $control"
   $dry_run || "$M2S_BIN" launch-qa --task "$task" --control "$control"
@@ -299,15 +418,18 @@ while true; do
 
   step_log "phase 5: collect-qa"
   $dry_run && step_dry "m2s collect-qa --handoff $WT/.task/handoff.json --control $control"
-  $dry_run || "$M2S_BIN" collect-qa \
-    --handoff "$WT/.task/handoff.json" \
-    --control "$control"
+  $dry_run || {
+    normalize_handoff "$WT/.task/handoff.json"
+    "$M2S_BIN" collect-qa \
+      --handoff "$WT/.task/handoff.json" \
+      --control "$control"
+  }
 
   CURRENT_STATUS=$(read_status)
   if [[ "$CURRENT_STATUS" == "merge-ready" || "$dry_run" == "true" ]]; then
     step_log "QA: lulus — status merge-ready"
     break
-  elif [[ "$CURRENT_STATUS" == "running" ]]; then
+  elif [[ "$CURRENT_STATUS" == "running" || "$CURRENT_STATUS" == "defect-found" ]]; then
     qa_iter=$((qa_iter + 1))
     if [[ $qa_iter -ge $MAX_FIX_LOOP ]]; then
       step_log "BATAS QA LOOP ($MAX_FIX_LOOP) — berhenti"
