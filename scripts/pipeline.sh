@@ -66,6 +66,14 @@ read_yaml_field() {
   grep -m1 "^${key}:" "$file" 2>/dev/null | sed "s/^${key}: *//" | tr -d '"'
 }
 
+# gh_repo <repo> — resolve "<owner>/<repo>" dari remote origin control repo
+gh_repo() {
+  local r="$1" owner
+  owner="$(git remote get-url origin 2>/dev/null | sed -E 's#https://github.com/([^/]+)/.*#\1#')"
+  owner="${owner:-Mind2Screen-Dev-Team}"
+  echo "${owner}/${r}"
+}
+
 # read_reservation — baca field reservasi task; set vars: WT, REPO, BRANCH, OWNER_ROLE
 read_reservation() {
   local res="$control/control/reservations/$task.yaml"
@@ -347,8 +355,8 @@ while true; do
   # gh pr list --head $BRANCH mengembalikan PR nyata, tidak bergantung pada
   # angka yang ditulis agent di handoff.
   PR_URL=""
-  if [[ -n "$BRANCH" ]]; then
-    PR_URL=$(gh pr list --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
+  if [[ -n "$BRANCH" && -n "$REPO" ]]; then
+    PR_URL=$(gh pr list --repo "$(gh_repo "$REPO")" --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
   fi
   step_log "phase 3: collect-result (pr_url=$PR_URL)"
   PR_FLAG=""
@@ -491,8 +499,8 @@ done
 # ── Selesai ───────────────────────────────────────────────────────────────
 
 PR_FINAL=""
-if [[ -n "$BRANCH" ]]; then
-  PR_FINAL=$(gh pr list --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
+if [[ -n "$BRANCH" && -n "$REPO" ]]; then
+  PR_FINAL=$(gh pr list --repo "$(gh_repo "$REPO")" --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
 fi
 
 echo ""
