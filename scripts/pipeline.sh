@@ -379,13 +379,6 @@ while true; do
   $dry_run && step_dry "m2s launch-review --task $task --control $control"
   $dry_run || "$M2S_BIN" launch-review --task "$task" --control "$control"
 
-  # Advance status implementation-complete → reviewing (runner) SEBELUM spawn
-  # reviewer, agar collect-review memulai transisi dari reviewing. State machine
-  # §33 menolak lompatan implementation-complete → changes-requested.
-  step_log "phase 4: set status reviewing (runner)"
-  $dry_run && step_dry "m2s update-status -task $task -status reviewing -by runner"
-  $dry_run || "$M2S_BIN" update-status -task "$task" -status reviewing -by runner
-
   step_log "phase 4: spawn code-reviewer model=$(agent_model code-reviewer)"
   spawn_agent "code-reviewer" "$WT" "$PROMPT_REVIEW"
 
