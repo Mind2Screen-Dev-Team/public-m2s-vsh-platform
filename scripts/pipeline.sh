@@ -98,7 +98,7 @@ normalize_handoff() {
   [[ -f "$handoff" ]] || return 0
 
   # Python script untuk normalisasi handoff
-  python3 - <<EOF > "${handoff}.tmp" || cat "${handoff}.tmp" && return 1
+  python3 - <<EOF > "${handoff}.tmp" || { cat "${handoff}.tmp"; return 1; }
 import json,sys
 d = json.load(open('$handoff'))
 
