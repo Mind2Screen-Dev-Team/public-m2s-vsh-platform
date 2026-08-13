@@ -685,6 +685,13 @@ func cmdLaunchReview(args []string) int {
 		return fail(exitViolation, "reservasi %s berstatus %s — review menuntut path masih ditahan", *taskID, res.Status())
 	}
 
+	// Advance implementation-complete → reviewing (runner-owned). collect-review
+	// memulai transisi dari reviewing; tanpa ini, request-changes ditolak karena
+	// lompatan implementation-complete → changes-requested (state machine §33).
+	if err := writeStatus(st, *taskID, "reviewing", "code-reviewer", nil); err != nil {
+		return fail(exitViolation, "%v", err)
+	}
+
 	fmt.Printf("siap  jalankan code-reviewer (read-only) dengan repo %s branch %s worktree %s\n",
 		res.Repository(), res.Branch(), res.Worktree())
 	return exitOK
