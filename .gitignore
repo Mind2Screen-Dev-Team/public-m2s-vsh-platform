@@ -50,5 +50,10 @@ control/pre-dev/
 # Binary tidak dapat direview di PR dan terikat platform build-nya.
 bin/
 
+# ── Schema bundled (generated) — hasil scripts/bundle-handoff-schema.sh ──
+# Dibangkitkan saat runtime untuk `claude --json-schema` (yang menolak $ref
+# lintas-file). Kanonik tetap schemas/*.schema.json.
+schemas/.bundle/
+
 # ── Claude Code lokal (personal, tidak mengubah project behaviour) ────
 .claude/settings.local.json
