@@ -293,8 +293,21 @@ Setelah selesai:
 2. Push branch: git push origin $BRANCH.
 3. Buat PR ke develop: gh pr create --base develop --title \"[task $task]\" --body \"Implementasi $task\".
 4. Tulis handoff ke .task/handoff.json sesuai schemas/handoff.schema.json.
-   Wajib: schema_version, task_id ($task), role ($SPEC_ROLE), status (implementation-complete),
-   summary, changed_files, tests, contract_deviations. Sertakan pr_url dari PR yang dibuat.
+   WAJIB bentuk field berikut (lihat schemas/examples/handoff-BE-101.valid.yaml):
+   - schema_version: \"1.0\"
+   - task_id: \"$task\"
+   - role: \"$SPEC_ROLE\"
+   - status: \"implementation-complete\"
+   - summary: string
+   - changed_files: ARRAY OF OBJECT, tiap elemen {path, purpose, change_kind} — BUKAN array string.
+   - tests: OBJECT {executed: [{command, result, output_excerpt?}]} — result wajib salah satu dari passed/failed/skipped. BUKAN array langsung.
+   - contract_deviations: array (kosong [] bila tidak ada)
+   - pr_url: string URL PR yang dibuat
+   Contoh tests:
+     \"tests\": {\"executed\": [{\"command\": \"go test ./...\", \"result\": \"passed\"}]}
+   Contoh changed_files:
+     \"changed_files\": [{\"path\": \"internal/handler/x.go\", \"purpose\": \"handler POST\", \"change_kind\": \"added\"}]
+   JANGAN tulis changed_files sebagai array string, JANGAN tulis tests sebagai array langsung.
 Ikuti acceptance_criteria dan quality_gates di contract."
 
 # ── Phase 3: loop implementer (maks MAX_FIX_LOOP iterasi) ────────────────
@@ -343,9 +356,14 @@ done
 PROMPT_REVIEW="Kamu adalah code-reviewer. Lakukan review read-only terhadap diff PR task $task.
 Baca .task/contract.json untuk acceptance criteria dan quality gates.
 Tulis review report ke .task/handoff.json (schema: schemas/handoff.schema.json, role code-reviewer).
-Wajib: decision (approve / approve-with-nonblocking-notes / request-changes),
-findings (bila request-changes: min 1 finding dengan severity, category, location, reason, recommended_action),
-changed_files: [], tests (bukti static analysis / read-only test run).
+WAJIB bentuk field (lihat schemas/examples/handoff-review-BE-101.valid.yaml):
+- schema_version: \"1.0\", task_id: \"$task\", role: \"code-reviewer\", status: \"implementation-complete\" atau \"changes-requested\"
+- decision: salah satu dari approve / approve-with-nonblocking-notes / request-changes (BUKAN \"approved\")
+- changed_files: [] (wajib KOSONG — reviewer read-only)
+- summary: string
+- tests: OBJECT {executed: [{command, result, output_excerpt?}]} — result passed/failed/skipped. BUKAN array.
+- contract_deviations: []
+- findings: tiap elemen WAJIB {severity (nit/minor/major/blocker), category (correctness/security/maintainability/test/scope/performance), location: {path, line}, reason, recommended_action}. BUKAN pakai file/line/message.
 JANGAN edit atau tulis berkas application code apa pun."
 
 review_iter=0
@@ -397,9 +415,14 @@ done
 PROMPT_QA="Kamu adalah qa-engineer. Verifikasi implementasi task $task.
 Baca .task/contract.json: jalankan quality_gates dan verifikasi acceptance_criteria.
 Tulis handoff ke .task/handoff.json (schema: schemas/handoff.schema.json, role qa-engineer).
-Wajib: status (implementation-complete bila lulus, defect-found bila ada defect),
-findings (bila defect-found: min 1 finding), changed_files (QA artifacts bila ada),
-tests (bukti eksekusi quality gates)."
+WAJIB bentuk field:
+- schema_version: \"1.0\", task_id: \"$task\", role: \"qa-engineer\"
+- status: \"implementation-complete\" bila lulus, \"defect-found\" bila ada defect
+- summary: string
+- changed_files: ARRAY OF OBJECT {path, purpose, change_kind} — BUKAN array string
+- tests: OBJECT {executed: [{command, result, output_excerpt?}]} — result passed/failed/skipped. BUKAN array langsung.
+- contract_deviations: []
+- findings: tiap elemen {severity, category, location: {path, line}, reason, recommended_action} — hanya bila defect-found."
 
 qa_iter=0
 while true; do
