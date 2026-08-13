@@ -343,10 +343,12 @@ while true; do
   [[ $fix_iter -gt 0 ]] && step_log "fix loop iterasi $fix_iter/$MAX_FIX_LOOP"
   step_log "phase 3: spawn implementer ($SPEC_ROLE)"
   spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL"
-  # Baca pr_url dari handoff (bila ada)
+  # Resolve PR dari branch (bukan handoff — agent sering halusinasi pr_url).
+  # gh pr list --head $BRANCH mengembalikan PR nyata, tidak bergantung pada
+  # angka yang ditulis agent di handoff.
   PR_URL=""
-  if [[ -f "$WT/.task/handoff.json" ]]; then
-    PR_URL=$(python3 -c "import json,sys; d=json.load(open('$WT/.task/handoff.json')); print(d.get('pr_url',''))" 2>/dev/null || true)
+  if [[ -n "$BRANCH" ]]; then
+    PR_URL=$(gh pr list --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
   fi
   step_log "phase 3: collect-result (pr_url=$PR_URL)"
   PR_FLAG=""
@@ -489,10 +491,8 @@ done
 # ── Selesai ───────────────────────────────────────────────────────────────
 
 PR_FINAL=""
-if [[ -f "$WT/.task/handoff.json" ]]; then
-  PR_FINAL=$(python3 -c \
-    "import json; d=json.load(open('$WT/.task/handoff.json')); print(d.get('pr_url',''))" \
-    2>/dev/null || true)
+if [[ -n "$BRANCH" ]]; then
+  PR_FINAL=$(gh pr list --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
 fi
 
 echo ""
