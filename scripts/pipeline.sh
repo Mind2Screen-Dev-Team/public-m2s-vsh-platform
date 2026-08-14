@@ -212,6 +212,54 @@ Perbaiki setiap temuan di atas, jalankan ulang quality_gates, commit + push, lal
   printf '%s' "$p"
 }
 
+# read_quality_gates <contract_json> — cetak daftar gate (satu per baris).
+# contract.json materialize saat launch-task di <worktree>/.task/contract.json.
+read_quality_gates() {
+  local cj="$1"
+  [[ -f "$cj" ]] || return 0
+  python3 -c '
+import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+for x in (d.get("quality_gates") or []):
+    print(x)
+' "$cj" 2>/dev/null
+}
+
+# run_quality_gates <worktree> <contract_json> — jalankan tiap gate di worktree.
+# Set global GATE_OUTPUT (output gate yang gagal). Return 0 bila semua pass/skip,
+# 1 bila ada yang fail. Gate yang toolchain-nya tak tersedia di-skip (warn),
+# bukan dianggap gagal — env mobile/web (Flutter/Xcode) sering absen di runner.
+GATE_OUTPUT=""
+run_quality_gates() {
+  local wt="$1" cj="$2" gates gate out rc any_fail=0
+  GATE_OUTPUT=""
+  gates="$(read_quality_gates "$cj")"
+  [[ -z "$gates" ]] && return 0
+  while IFS= read -r gate; do
+    [[ -z "$gate" ]] && continue
+    step_log "quality-gate: $gate"
+    # Toolchain check pakai kata pertama command ("go", "make", "flutter", ...).
+    if ! command -v "${gate%% *}" >/dev/null 2>&1; then
+      step_log "quality-gate: SKIP $gate — toolchain '${gate%% *}' tidak tersedia di runner"
+      continue
+    fi
+    out="$(cd "$wt" && bash -c "$gate" 2>&1)"; rc=$?
+    if [[ $rc -ne 0 ]]; then
+      any_fail=1
+      # Batasi output agar prompt fix tidak meledak — ambil 40 baris terakhir.
+      GATE_OUTPUT="${GATE_OUTPUT}
+=== QUALITY GATE GAGAL: ${gate} (exit ${rc}) ===
+$(printf '%s' "$out" | tail -40)"
+    else
+      step_log "quality-gate: pass — $gate"
+    fi
+  done <<< "$gates"
+  return "$any_fail"
+}
+
 # ── Phase 0: setup & verifikasi binary ────────────────────────────────────────
 
 [[ -x "$M2S_BIN" ]] || {
@@ -313,6 +361,20 @@ while true; do
   if [[ -n "$BRANCH" && -n "$REPO" ]]; then
     PR_URL=$(gh pr list --repo "$(gh_repo "$REPO")" --head "$BRANCH" --state all --json url --jq '.[0].url' 2>/dev/null || true)
   fi
+  # Gate quality_gates SEBELUM collect-result. Implementer yang klaim
+  # implementation-complete padahal build/test gagal dihentikan di sini —
+  # status tidak maju, output gate disuntik ke prompt fix berikutnya.
+  if ! $dry_run && ! run_quality_gates "$WT" "$WT/.task/contract.json"; then
+    step_log "quality-gate: GAGAL — tahan implementation-complete, re-spawn implementer dengan output gate"
+    if [[ $fix_iter -ge $((MAX_FIX_LOOP - 1)) ]]; then
+      step_log "BATAS FIX LOOP ($MAX_FIX_LOOP) tercapai — berhenti (quality gate gagal)"
+      exit 1
+    fi
+    GATE_PROMPT="$(build_fix_prompt "$GATE_OUTPUT")"
+    fix_iter=$((fix_iter + 1))
+    spawn_agent "$SPEC_ROLE" "$WT" "$GATE_PROMPT"
+    continue
+  fi
   step_log "phase 3: collect-result (pr_url=$PR_URL)"
   PR_FLAG=""
   [[ -n "$PR_URL" ]] && PR_FLAG="--pr $PR_URL"
@@ -352,7 +414,7 @@ JANGAN edit atau tulis berkas application code apa pun."
 review_iter=0
 while true; do
   CURRENT_STATUS=$(read_status)
-  # Resume: bila sudah qa-testing/merge-ready, lewati review. `reviewing` TIDAK
+   # Resume: bila sudah qa-testing/merge-ready, lewati review. `reviewing` TIDAK
   # termasuk di sini — ia ambigu (launch-review advance ATAU collect-review approve).
   # Bila reviewer belum selesai, pipeline wajib jalankan launch-review (idempoten)
   # + spawn reviewer, bukan lompat QA (Bug 5 lanjutan).
@@ -396,7 +458,20 @@ while true; do
     REVIEW_FINDINGS="$(read_findings "$WT/.task/handoff.json")"
     PROMPT_IMPL_FIX="$(build_fix_prompt "$REVIEW_FINDINGS")"
     spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
+    # Gate sebelum collect-result: implementer yang klaim selesai tanpa build/
+    # test hijau di-spawn ulang dengan output gate sampai hijau (bounded).
     $dry_run || {
+      local gate_try=0
+      while ! run_quality_gates "$WT" "$WT/.task/contract.json"; do
+        gate_try=$((gate_try + 1))
+        if [[ $gate_try -ge $MAX_FIX_LOOP ]]; then
+          step_log "quality-gate: GAGAL $gate_try× setelah fix review — berhenti"
+          exit 1
+        fi
+        step_log "quality-gate: GAGAL — re-spawn implementer dengan output gate (iter $gate_try/$MAX_FIX_LOOP)"
+        PROMPT_IMPL_FIX="$(build_fix_prompt "$GATE_OUTPUT")"
+        spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
+      done
       if ! "$M2S_BIN" collect-result \
         --handoff "$WT/.task/handoff.json" \
         --control "$control"; then
@@ -469,6 +544,17 @@ while true; do
     PROMPT_IMPL_FIX="$(build_fix_prompt "$QA_FINDINGS")"
     spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
     $dry_run || {
+      local gate_try=0
+      while ! run_quality_gates "$WT" "$WT/.task/contract.json"; do
+        gate_try=$((gate_try + 1))
+        if [[ $gate_try -ge $MAX_FIX_LOOP ]]; then
+          step_log "quality-gate: GAGAL $gate_try× setelah fix QA — berhenti"
+          exit 1
+        fi
+        step_log "quality-gate: GAGAL — re-spawn implementer dengan output gate (iter $gate_try/$MAX_FIX_LOOP)"
+        PROMPT_IMPL_FIX="$(build_fix_prompt "$GATE_OUTPUT")"
+        spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
+      done
       if ! "$M2S_BIN" collect-result \
         --handoff "$WT/.task/handoff.json" \
         --control "$control"; then
