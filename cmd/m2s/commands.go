@@ -672,14 +672,17 @@ func cmdLaunchReview(args []string) int {
 		return fail(exitError, "%v", err)
 	}
 
-	// Gate ADR-012: hanya spawn review bila implementer menyatakan selesai.
+	// Gate ADR-012 (Bug 5 fix): spawn review bila implementer selesai ATAU
+	// reviewer belum selesai (pipeline mati di tengah review). Dua status valid:
+	// implementation-complete (belum launch) atau reviewing (launch pernah jalan,
+	// handoff reviewer belum terbentuk).
 	cur, err := st.Read(*taskID)
 	if err != nil {
-		return fail(exitViolation, "%s — launch-review menuntut implementation-complete", *taskID)
+		return fail(exitViolation, "%s — launch-review menuntut implementation-complete atau reviewing", *taskID)
 	}
-	if cur.Status() != "implementation-complete" {
+	if cur.Status() != "implementation-complete" && cur.Status() != "reviewing" {
 		return fail(exitViolation,
-			"%s berstatus %s — launch-review menuntut implementation-complete (ADR-012)",
+			"%s berstatus %s — launch-review menuntut implementation-complete atau reviewing (ADR-012)",
 			*taskID, cur.Status())
 	}
 
@@ -696,8 +699,12 @@ func cmdLaunchReview(args []string) int {
 	// Advance implementation-complete → reviewing (runner-owned). collect-review
 	// memulai transisi dari reviewing; tanpa ini, request-changes ditolak karena
 	// lompatan implementation-complete → changes-requested (state machine §33).
-	if err := writeStatus(st, *taskID, "reviewing", "code-reviewer", nil); err != nil {
-		return fail(exitViolation, "%v", err)
+	// Bila sudah reviewing (resume), skip — no-op idempotent (writeStatus ke
+	// status sama juga no-op, tapi jaga agar tak menimpa by).
+	if cur.Status() == "implementation-complete" {
+		if err := writeStatus(st, *taskID, "reviewing", "code-reviewer", nil); err != nil {
+			return fail(exitViolation, "%v", err)
+		}
 	}
 
 	fmt.Printf("siap  jalankan code-reviewer (read-only) dengan repo %s branch %s worktree %s\n",
