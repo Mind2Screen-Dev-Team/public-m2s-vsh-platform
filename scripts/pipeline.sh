@@ -173,6 +173,45 @@ except Exception:
   return 1
 }
 
+read_findings() {
+  local hf="$1"
+  [[ -f "$hf" ]] || { echo ""; return 0; }
+  python3 -c '
+import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+except Exception:
+    sys.exit(0)
+fs=d.get("findings") or []
+if not fs:
+    sys.exit(0)
+out=[]
+for i,f in enumerate(fs,1):
+    loc=f.get("location") or {}
+    path=loc.get("path","")
+    line=loc.get("line","")
+    where=path + (":" + str(line) if line else "")
+    out.append("%d. [%s/%s] %s\n   reason: %s\n   aksi: %s" % (
+        i, f.get("severity","?"), f.get("category","?"), where,
+        f.get("reason",""), f.get("recommended_action","")))
+print("\n".join(out))
+' "$hf" 2>/dev/null || true
+}
+
+# build_fix_prompt <findings_text> — prompt implementer re-spawn dengan findings
+# tersuntik. Bila tak ada findings, kembalikan PROMPT_IMPL apa adanya.
+build_fix_prompt() {
+  local findings="$1" p="$PROMPT_IMPL"
+  if [[ -n "$findings" ]]; then
+    p="${p}
+
+=== TEMUAN REVIEW/QA YANG HARUS DIPERBAIKI (jangan ulangi yang sama) ===
+${findings}
+Perbaiki setiap temuan di atas, jalankan ulang quality_gates, commit + push, lalu tulis handoff implementation-complete."
+  fi
+  printf '%s' "$p"
+}
+
 # ── Phase 0: setup & verifikasi binary ────────────────────────────────────────
 
 [[ -x "$M2S_BIN" ]] || {
@@ -350,7 +389,10 @@ while true; do
       exit 1
     fi
     step_log "review: changes-requested — re-spawn implementer (iter $review_iter/$MAX_FIX_LOOP)"
-    spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL"
+    # Tangkap findings reviewer SEBELUM spawn_agent menghapus handoff.json.
+    REVIEW_FINDINGS="$(read_findings "$WT/.task/handoff.json")"
+    PROMPT_IMPL_FIX="$(build_fix_prompt "$REVIEW_FINDINGS")"
+    spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
     $dry_run || {
       if ! "$M2S_BIN" collect-result \
         --handoff "$WT/.task/handoff.json" \
@@ -420,7 +462,9 @@ while true; do
       exit 1
     fi
     step_log "QA: defect-found → re-spawn implementer di worktree sama (iter $qa_iter/$MAX_FIX_LOOP)"
-    spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL"
+    QA_FINDINGS="$(read_findings "$WT/.task/handoff.json")"
+    PROMPT_IMPL_FIX="$(build_fix_prompt "$QA_FINDINGS")"
+    spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
     $dry_run || {
       if ! "$M2S_BIN" collect-result \
         --handoff "$WT/.task/handoff.json" \
