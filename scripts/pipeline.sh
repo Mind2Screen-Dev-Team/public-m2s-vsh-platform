@@ -352,9 +352,12 @@ JANGAN edit atau tulis berkas application code apa pun."
 review_iter=0
 while true; do
   CURRENT_STATUS=$(read_status)
-  # Resume: bila sudah reviewing/qa-testing/merge-ready, lewati review.
+  # Resume: bila sudah qa-testing/merge-ready, lewati review. `reviewing` TIDAK
+  # termasuk di sini — ia ambigu (launch-review advance ATAU collect-review approve).
+  # Bila reviewer belum selesai, pipeline wajib jalankan launch-review (idempoten)
+  # + spawn reviewer, bukan lompat QA (Bug 5 lanjutan).
   case "$CURRENT_STATUS" in
-    reviewing|qa-testing|merge-ready|ci-passed|merged) step_log "review: sudah $CURRENT_STATUS — lanjut"; break ;;
+    qa-testing|merge-ready|ci-passed|merged) step_log "review: sudah $CURRENT_STATUS — lanjut"; break ;;
   esac
   step_log "phase 4: launch-review"
   $dry_run && step_dry "m2s launch-review --task $task --control $control"
