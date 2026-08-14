@@ -461,7 +461,7 @@ while true; do
     # Gate sebelum collect-result: implementer yang klaim selesai tanpa build/
     # test hijau di-spawn ulang dengan output gate sampai hijau (bounded).
     $dry_run || {
-      local gate_try=0
+      gate_try=0
       while ! run_quality_gates "$WT" "$WT/.task/contract.json"; do
         gate_try=$((gate_try + 1))
         if [[ $gate_try -ge $MAX_FIX_LOOP ]]; then
@@ -544,7 +544,7 @@ while true; do
     PROMPT_IMPL_FIX="$(build_fix_prompt "$QA_FINDINGS")"
     spawn_agent "$SPEC_ROLE" "$WT" "$PROMPT_IMPL_FIX"
     $dry_run || {
-      local gate_try=0
+      gate_try=0
       while ! run_quality_gates "$WT" "$WT/.task/contract.json"; do
         gate_try=$((gate_try + 1))
         if [[ $gate_try -ge $MAX_FIX_LOOP ]]; then
