@@ -54,7 +54,7 @@ while [[ $attempt -lt $SPAWN_RETRY ]]; do
       "Kamu adalah code-reviewer. Review diff PR task $task (read-only).
 Baca .task/contract.json. Tulis review report ke .task/handoff.json
 (role code-reviewer, wajib: decision, changed_files: [], tests, findings bila request-changes)." \
-      | claude --print --model "$MODEL" --allowedTools "$TOOLS" 2>>"$WT/.task/audit.log" || true)"
+      | claude --print ANTHROPIC_MODEL="$MODEL" --allowedTools "$TOOLS" 2>>"$WT/.task/audit.log" || true)"
     if [[ -n "$REVIEW_OUT" ]] && [[ ! -f "$WT/.task/handoff.json" ]]; then
       printf '%s' "$REVIEW_OUT" | awk '/^```json/{f=1;next} /^```/{if(f)exit} f{print}' \
         | sed '/^[[:space:]]*$/d' \

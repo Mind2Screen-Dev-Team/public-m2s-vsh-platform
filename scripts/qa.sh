@@ -44,7 +44,7 @@ $dry_run || (cd "$WT" && printf '%s' \
 Baca .task/contract.json, jalankan quality_gates, verifikasi acceptance_criteria.
 Tulis handoff ke .task/handoff.json (role qa-engineer, status implementation-complete
 bila lulus, defect-found bila ada defect, wajib: findings bila defect-found, tests)." \
-  | claude --print --model "$MODEL" --allowedTools "$TOOLS" > /dev/null) || true
+  | claude --print ANTHROPIC_MODEL="$MODEL" --allowedTools "$TOOLS" > /dev/null) || true
 $dry_run && echo "[dry-run] claude --print --model $MODEL --allowedTools $TOOLS"
 
 echo "[qa:$task] collect-qa"

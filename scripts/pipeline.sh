@@ -142,7 +142,7 @@ spawn_agent() {
     local out rc
     out="$(cd "$wt" && printf '%s' "$prompt" \
       | claude --print \
-          --model "$model" \
+          ANTHROPIC_MODEL="$model" \
           --allowedTools "$tools" \
           --json-schema "$schema" \
           --output-format text \
