@@ -73,7 +73,7 @@ jobs:
           esac
 
           task_id=$(printf '%s' "$HEAD_REF" \
-            | sed -n 's#^agent/\([A-Z][A-Z0-9]*-[0-9]\{1,\}\)-.*#\1#p')
+            | sed -n -E 's#^agent/([A-Z][A-Z0-9]+(-[A-Z0-9]+)*-[0-9]+)-.*#\\1#p')
           if [ -z "$task_id" ]; then
             echo "::error::branch '$HEAD_REF' tidak mengikuti pola agent/<task-id>-<slug> (§44)"
             echo "mode=malformed" >> "$GITHUB_OUTPUT"
